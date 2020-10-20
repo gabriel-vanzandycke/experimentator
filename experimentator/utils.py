@@ -73,15 +73,6 @@ def mkdir(path):
         if not os.path.isdir(path):
             raise
 
-class Callback():
-    precedence = 10
-    def __init__(self, *args, **kwargs):
-        pass
-    def fire(self, event, state):
-        cb = getattr(self, "on_{}".format(event), None)
-        if cb:
-            cb(**state, state=state) # pylint: disable=not-callable
-
 def find(filename, dirs=None, verbose=True):
     if os.path.isabs(filename):
         if not os.path.isfile(filename):
