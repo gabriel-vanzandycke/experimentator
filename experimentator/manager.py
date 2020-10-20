@@ -10,17 +10,13 @@ from matplotlib import pyplot as plt
 from tqdm import tqdm_notebook, tqdm
 import numpy as np
 from ast import literal_eval as make_tuple
-from collections import defaultdict
-from pprint import pprint
 
 from ipywidgets import interact, widgets, Layout, Output, interactive, Box
 from IPython import display
 
-import inquirer
-
 from mlworkflow import find_files, get_callable, exec_dict, LazyConfigurable, lazyproperty
 
-from .utils import find, datetime, StagnationError, Callable, DataCollector, mkdir
+from .utils import datetime, Callable, DataCollector, mkdir
 
 from .base_experiment import NotebookExperiment
 
@@ -90,10 +86,10 @@ class ExperimentManager(LazyConfigurable):
     def progress(generator, **kwargs):
         return tqdm(generator, leave=False, **kwargs)
 
-    @staticmethod
-    def build_experiment(cfg=None, filename=None):
+    def build_experiment(self, cfg=None, filename=None):
         assert not cfg or not filename
         cfg = cfg or DataCollector(filename)["cfg"]
+        cfg["GPU"] = "{}".format(self.gpu)
         if filename:
             cfg["logger_filename"] = filename
         return type("Exp", tuple(get_callable(n) for n in cfg["experiment"][::-1]), {})(cfg)
@@ -101,7 +97,7 @@ class ExperimentManager(LazyConfigurable):
     # def load(self):
     #     questions = [inquirer.List('filename', message="Select process file", choices=list(reversed(find_files("process_[0-9_]*.pickle"))))]
     #     filename = inquirer.prompt(questions)['filename']
-    #     cfgs = pickle.load(open(filename, "rb"))
+    #     cfgs = pickle.load(open(filename, "rb"))cfg
     #     options = {str(cfg["grid_sample"]): cfg for cfg in cfgs}
     #     questions = [inquirer.List('runall', message="Wich experiments would you like to execute?", choices=["all", "select"])]
     #     answer = inquirer.prompt(questions)["runall"]
@@ -121,11 +117,12 @@ def parse_grid_sample(grid_sample_str):
 
 
 class ExperimentManagerNotebook(ExperimentManager):
-    def __init__(self, filename=None, *args, **kwargs):
+    def __init__(self, gpu, filename=None, *args, **kwargs):
+        self.gpu = gpu
         self.output = Output()
         display.display(self.output)
         if filename is not None:
-            super().__init__(filename, *args, **kwargs)
+            super().__init__(filename, gpu, *args, **kwargs)
         else:
             self.load()
         self.selected_exps = None
@@ -138,10 +135,10 @@ class ExperimentManagerNotebook(ExperimentManager):
         with self.output:
             return tqdm_notebook(generator, leave=False, **kwargs)
 
-    @staticmethod
-    def build_experiment(cfg=None, filename=None):
+    def build_experiment(self, cfg=None, filename=None):
         assert not cfg or not filename
         cfg = cfg if filename is None else DataCollector(filename)["cfg"]
+        cfg["GPU"] = "{}".format(self.gpu)
         if filename:
             cfg["logger_filename"] = filename
         classes = tuple(get_callable(n) for n in cfg["experiment"][::-1])
@@ -159,7 +156,7 @@ class ExperimentManagerNotebook(ExperimentManager):
                 else:
                     if "message" in exp.logger:
                         print(exp.logger["message"], file=sys.stderr)
-                fig = exp.plot_metrics(fig=fig, metrics_names=exp.get("metrics_names", ["accuracy", "precision", "recall", "loss", "batch_time"]))
+                fig = exp.plot_metrics(fig=fig, metrics_names=exp.get("metrics_names", ["factor", "accuracy", "precision", "recall", "loss", "batch_time"]))
         config = Config(self.filename)
         options_reversed = {filename:parse_grid_sample(grid_sample_str) for filename, grid_sample_str in dict(config["Meta"]).items() if filename not in ["version", "id"]}
         options_reversed = {filename:grid_sample for filename, grid_sample in options_reversed.items() if
@@ -173,7 +170,7 @@ class ExperimentManagerNotebook(ExperimentManager):
     def load(self):
         @interact(filename=reversed(find_files("*.ini")))
         def _(filename):
-            super(ExperimentManagerNotebook, self).__init__(filename)
+            super(ExperimentManagerNotebook, self).__init__(filename, self.gpu)
             params_lists = {}
             config = Config(self.filename)
             for grid_sample in [parse_grid_sample(grid_sample_str) for filename, grid_sample_str in dict(config["Meta"]).items() if filename not in ["version", "id"]]:

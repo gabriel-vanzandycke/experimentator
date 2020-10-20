@@ -8,7 +8,7 @@ from ipywidgets import Output
 
 from mlworkflow import SideRunner, LazyConfigurable, lazyproperty, TransformedDataset, PickledDataset, pickle_or_load
 
-from utils import DataCollector, StagnationError, get_axes, build_metrics_axes, plot, datetime, transforms_to_name, mkdir, find, RobustBatchesDataset
+from .utils import DataCollector, StagnationError, get_axes, build_metrics_axes, plot, datetime, transforms_to_name, mkdir, find, RobustBatchesDataset
 
 
 class BaseExperiment(LazyConfigurable):
@@ -58,8 +58,8 @@ class BaseExperiment(LazyConfigurable):
         return tqdm(generator, **kwargs, disable=self.get("hide_progress", False), leave=False)
 
 
-    def batch_generator(self, subset):
-        batch_size = self["batch_size"]
+    def batch_generator(self, subset, batch_size=None):
+        batch_size = batch_size or self["batch_size"]
         # TODO handle balanced batches
         shuffeled_keys = subset.shuffeled_keys
         self.batch_count += len(shuffeled_keys)//batch_size
@@ -86,7 +86,7 @@ class BaseExperiment(LazyConfigurable):
     def run_cycle(self, subset, progress):
         progress.set_description(subset.name)
         for keys, data in self.batch_generator(subset): # pylint: disable=unused-variable
-            _ = self.run_batch(subset, data)
+            _ = self.run_batch(subset=subset, data=data)
             progress.update(1)
 
     def run_epoch(self, epoch):
@@ -112,18 +112,20 @@ class CallbackedExperiment(BaseExperiment): # pylint: disable=abstract-method
 
     @lazyproperty
     def callbacks(self):
-        callbacks = [cb(exp=self) for cb in self["callbacks"]]
+        callbacks = [cb(exp=self) for cb in self["callbacks"] if cb is not None]
         return sorted(callbacks, key=lambda cb: cb.precedence)
 
     def fire(self, event):
         for cb in self.callbacks:
             cb.fire(event, self.state)
 
-    def run_batch(self, *args, **kwargs):
+    def run_batch(self, data, *args, **kwargs):
         self.state["batch_id"] = self.state["batch_id"] + 1
+        self.state["data"] = data
         self.fire("batch_begin")
-        result = super().run_batch(*args, **kwargs)
+        result = super().run_batch(data=data, *args, **kwargs)
         self.state.update(**{k:v for k,v in result.items() if k in list(self.metrics.keys())+["loss"]})
+        del self.state["data"]
         self.fire("batch_end")
         return result
 
@@ -145,14 +147,15 @@ class AsyncExperiment(BaseExperiment): # pylint: disable=abstract-method
     def side_runner(self):
         return SideRunner()
 
-    def batch_generator(self, subset):
-        batch_generator = super().batch_generator(subset)
+    def batch_generator(self, *args, **kwargs):
+        batch_generator = super().batch_generator(*args, **kwargs)
         return self.side_runner.yield_async(batch_generator)
 
 class LoggedExperiment(BaseExperiment):
     @lazyproperty
     def logger(self):
-        filename = self["logger_filename"].format(datetime()["dt"])
+        self.cfg["experiment_id"] = datetime()["dt"]
+        filename = self["logger_filename"].format(self.cfg["experiment_id"])
         logger = DataCollector(filename, external=["weights"])
         logger["cfg"] = self.cfg
         return logger
@@ -252,8 +255,9 @@ class NotebookExperiment(LoggedExperiment, LazyConfigurable):  # pylint: disable
                     continue
                 plot(ax, data, label=subset.legend, legend=True, average=False, linestyle=subset.linestyle, marker=".", linewidth=1, markersize=10)
                 if np.any(data):
-                    if metric_name == "loss" and subset.name == "training":# and len(data.shape) != 1:
-                        ax.set_ylim([0, 10*np.nanmin(data)])
+                    if metric_name == "loss" and subset.name == "training" and data.shape[0] > 3:
+                        avg = np.nanmean(data[1:])
+                        ax.set_ylim([0, 2*avg])
                     if "time" in metric_name and subset.name == "training" and not np.isnan(data).any():
                         ax.set_ylim([0, 11*np.nanmax(data)/10])
 
