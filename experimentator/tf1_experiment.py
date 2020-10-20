@@ -1,7 +1,7 @@
 import os
 import random
-import numpy as np
 import logging
+import numpy as np
 from .base_experiment import BaseExperiment, lazyproperty
 from .utils import OutputInhibitor
 if False: # pylint: disable=using-constant-test
@@ -106,6 +106,8 @@ class TensorflowExperiment(BaseExperiment):
         with self.graph.as_default():  # pylint: disable=not-context-manager
             with self.graph.device(self.get("device", "/gpu:0")):  # pylint: disable=not-context-manager
                 for ChunkProcessor in self["chunk_processors"]:
+                    if ChunkProcessor is None:
+                        continue
                     chunk_processor = ChunkProcessor()
                     chunk_processor.graph = self.graph
                     with tf.name_scope(chunk_processor.__class__.__name__):
@@ -146,14 +148,14 @@ class TensorflowExperiment(BaseExperiment):
     def batch_eval(self, data, **fetches):
         fetches = {
             **self.metrics,
-            "loss": self.loss,
+            #"loss": self.loss,
             # this is necessary when I want both the metrics and the result
             **self.outputs,
             **fetches
         }
         # TODO: use sess.make_callable instead of sess.run ?
         feed_dict = self.feed_dict({"is_training": False, **data})
-        results = self.session.run(list(fetches.values()), feed_dict=feed_dict)
+        results = self.session.run(list(fetches.values()), feed_dict=feed_dict, options=self.run_options, run_metadata=self.run_metadata)
         results = dict(zip(fetches.keys(), results))
         return results
 
