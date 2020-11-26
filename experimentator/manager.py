@@ -37,6 +37,7 @@ class ExperimentManager(LazyConfigurable):
         self.__dict__.pop("experiments", None)
         self.robust = robust
         config = Config(filename)
+        self.gpu = gpu
         config["Pre"]["GPU"] = "'{}'".format(gpu)
         if "Meta" in config.sections():
             self.id = config["Meta"]["id"]
@@ -117,7 +118,7 @@ def parse_grid_sample(grid_sample_str):
 
 
 class ExperimentManagerNotebook(ExperimentManager):
-    def __init__(self, gpu, filename=None, *args, **kwargs):
+    def __init__(self, gpu, *args, filename=None, **kwargs):
         self.gpu = gpu
         self.output = Output()
         display.display(self.output)
@@ -156,7 +157,7 @@ class ExperimentManagerNotebook(ExperimentManager):
                 else:
                     if "message" in exp.logger:
                         print(exp.logger["message"], file=sys.stderr)
-                fig = exp.plot_metrics(fig=fig, metrics_names=exp.get("metrics_names", ["factor", "accuracy", "precision", "recall", "loss", "batch_time"]))
+                fig = exp.plot_metrics(fig=fig, metrics_names=exp.get("metrics_names", ["recall", "precision", "loss", "batch_time"]))
         config = Config(self.filename)
         options_reversed = {filename:parse_grid_sample(grid_sample_str) for filename, grid_sample_str in dict(config["Meta"]).items() if filename not in ["version", "id"]}
         options_reversed = {filename:grid_sample for filename, grid_sample in options_reversed.items() if
@@ -212,13 +213,13 @@ def delete_weights(experiments):
 
     for fl in files_list:
         for f in glob.glob(fl+"*"):
-            if os.path.isfile(f) == False:
+            if not os.path.isfile(f):
                 fold = int(f[-2:])
                 e = f[-5:-3]
                 top_weights_f = acc_idxs_folds[e][fold]
                 top_weights_f = [str(f) + "/" + str(t) + "_weights.data" for t in top_weights_f]
                 for w in glob.glob("{}/*".format(f)):
-                    if (w in top_weights_f) == False:
+                    if w not in top_weights_f:
                         os.remove(w)
                 print("Deleted weights of " + str(f))
 
@@ -266,7 +267,7 @@ def top_n_weight(exp, n=5):
 
 
 
-def parse_config(config, env, manager_id):
+def parse_config(config, env, manager_id="00000000_000000"):
     def create_config(pre_section, grid_sample, post_section):
         cfg = copy.deepcopy(pre_section)
         cfg.update(grid_sample)

@@ -1,20 +1,15 @@
 import os
 import sys
 import re
-import inspect
-import random
-from functools import wraps
 import datetime as DT
 import errno
-import cv2
 import dill as pickle
 import matplotlib as mpl
 from matplotlib import pyplot as plt
 import numpy as np
 from mlworkflow import get_callable, Dataset
 from mlworkflow.datasets import batchify
-import io
-import PIL
+
 
 class OutputInhibitor():
     def __init__(self, name=None):
@@ -40,6 +35,7 @@ class OutputInhibitor():
         if self.name:
             print("Done.")
 
+
 class RobustBatchesDataset(Dataset):
     def __init__(self, parent):
         self.parent = parent
@@ -58,6 +54,15 @@ class RobustBatchesDataset(Dataset):
         for dict_chunk in self.chunkify(keys, chunk_size=batch_size):
             yield list(dict_chunk.keys()), batchify(list(dict_chunk.values()))
 
+
+def mkdir(path):
+    try:
+        os.makedirs(path)
+    except OSError:
+        if not os.path.isdir(path):
+            raise
+
+
 class StagnationError(Exception):
     @classmethod
     def catch(cls, history, tail=5):
@@ -66,12 +71,6 @@ class StagnationError(Exception):
         if len(history) > tail and len(set(history[-tail:])) == 1:
             raise cls("after {} epochs.".format(epoch))
 
-def mkdir(path):
-    try:
-        os.makedirs(path)
-    except OSError:
-        if not os.path.isdir(path):
-            raise
 
 def find(filename, dirs=None, verbose=True):
     if os.path.isabs(filename):

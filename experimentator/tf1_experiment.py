@@ -182,6 +182,7 @@ class TensorflowExperiment(BaseExperiment):
         @param clear_devices
         @return The frozen graph definition.
         """
+        assert filename[-3:] == ".pb", "You must provide a *.pb file"
         output_nodes_names = output_nodes_names or list(self.outputs.keys())
         with self.graph.as_default(): # pylint: disable=not-context-manager
             # Remove the device directives from the graph for better portability
