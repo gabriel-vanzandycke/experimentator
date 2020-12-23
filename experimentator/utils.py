@@ -44,15 +44,15 @@ class RobustBatchesDataset(Dataset):
     def query_item(self, key):
         return self.parent.query_item(key)
     def chunkify(self, keys, chunk_size):
-        d = {}
-        for k, v in ((k,v) for k,v in ((k, self.query_item(k)) for k in keys) if v is not None):
-            d[k] = v
+        d = []
+        for kv in ((k,v) for k,v in ((k, self.query_item(k)) for k in keys) if v is not None):
+            d.append(kv)
             if len(d) == chunk_size:  # yield complete sublist and create a new list
                 yield d
-                d = {}
+                d = []
     def batches(self, keys, batch_size, wrapper=np.array, drop_incomplete=False):
         for dict_chunk in self.chunkify(keys, chunk_size=batch_size):
-            yield list(dict_chunk.keys()), batchify(list(dict_chunk.values()))
+            yield [kv[0] for kv in dict_chunk], batchify([kv[1] for kv in dict_chunk])
 
 
 def mkdir(path):
