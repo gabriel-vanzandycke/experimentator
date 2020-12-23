@@ -57,13 +57,11 @@ class BaseExperiment(LazyConfigurable):
     def progress(self, generator, **kwargs):
         return tqdm(generator, **kwargs, disable=self.get("hide_progress", False), leave=False)
 
-
-    def batch_generator(self, subset, batch_size=None):
+    def batch_generator(self, keys, batch_size=None):
         batch_size = batch_size or self["batch_size"]
         # TODO handle balanced batches
-        shuffeled_keys = subset.shuffeled_keys
-        self.batch_count += len(shuffeled_keys)//batch_size
-        for keys, batch in self.dataset.batches(shuffeled_keys, batch_size, drop_incomplete=True):
+        self.batch_count += len(keys)//batch_size
+        for keys, batch in self.dataset.batches(keys, batch_size, drop_incomplete=True):
             yield keys, {"batch_{}".format(k): v for k,v in batch.items()}
 
     def batch_infer(self, *args, **kwargs):
@@ -85,7 +83,7 @@ class BaseExperiment(LazyConfigurable):
 
     def run_cycle(self, subset, progress):
         progress.set_description(subset.name)
-        for keys, data in self.batch_generator(subset): # pylint: disable=unused-variable
+        for keys, data in self.batch_generator(subset.shuffeled_keys): # pylint: disable=unused-variable
             _ = self.run_batch(subset=subset, data=data)
             progress.update(1)
 
@@ -100,7 +98,7 @@ class BaseExperiment(LazyConfigurable):
 
     def train(self, epochs):
         self.init_model() # TODO: move elsewhere
-        range_epochs = range(self.epochs, epochs)
+        range_epochs = range(self.epochs+1, epochs+1)
         for epoch in self.progress(range_epochs, desc="epochs"):
             self.run_epoch(epoch)
 
@@ -137,7 +135,7 @@ class CallbackedExperiment(BaseExperiment): # pylint: disable=abstract-method
         self.fire("cycle_end")
 
     def run_epoch(self, *args, **kwargs):
-        self.state["epoch"] = self.state.get("epoch", self.epoch) + 1
+        self.state["epoch"] = self.state.get("epoch", self.epoch)# + 1 # why +1 ?
         self.fire("epoch_begin")
         super().run_epoch(*args, **kwargs)
         self.fire("epoch_end")
