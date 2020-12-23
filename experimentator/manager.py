@@ -28,16 +28,17 @@ class Config(configparser.ConfigParser):
         super().__init__()
         self.optionxform = lambda option: option # handle upper case config keys
         self.read_string(open(filename, "r").read())
-    
+
     def write(self, filename):
         super().write(open(filename, "w") )
 
 class ExperimentManager(LazyConfigurable):
-    def __init__(self, filename, gpu, robust=False, name=None):
+    def __init__(self, filename, gpu, robust=False, name=None, is_training=True):
         self.__dict__.pop("experiments", None)
         self.robust = robust
         config = Config(filename)
         self.gpu = gpu
+        self.is_training = is_training
         config["Pre"]["GPU"] = "'{}'".format(gpu)
         if "Meta" in config.sections():
             self.id = config["Meta"]["id"]
@@ -54,7 +55,7 @@ class ExperimentManager(LazyConfigurable):
 
     def yield_experiments(self, cfgs=None):
         config = Config(self.filename)
-        for cfg in (cfgs or parse_config(config, dict(Callable=Callable), self.id)):
+        for cfg in (cfgs or parse_config(config, dict(Callable=Callable, training=self.is_training), self.id)):
             yield self.build_experiment(cfg)
 
     def execute(self, epochs):
@@ -120,6 +121,8 @@ def parse_grid_sample(grid_sample_str):
 class ExperimentManagerNotebook(ExperimentManager):
     def __init__(self, gpu, *args, filename=None, **kwargs):
         self.gpu = gpu
+        self.args = args
+        self.kwargs = kwargs
         self.output = Output()
         display.display(self.output)
         if filename is not None:
@@ -138,7 +141,7 @@ class ExperimentManagerNotebook(ExperimentManager):
 
     def build_experiment(self, cfg=None, filename=None):
         assert not cfg or not filename
-        cfg = cfg if filename is None else DataCollector(filename)["cfg"]
+        cfg = cfg or DataCollector(filename)["cfg"]
         cfg["GPU"] = "{}".format(self.gpu)
         if filename:
             cfg["logger_filename"] = filename
@@ -171,7 +174,7 @@ class ExperimentManagerNotebook(ExperimentManager):
     def load(self):
         @interact(filename=reversed(find_files("*.ini")))
         def _(filename):
-            super(ExperimentManagerNotebook, self).__init__(filename, self.gpu)
+            super(ExperimentManagerNotebook, self).__init__(filename, *self.args, gpu=self.gpu, **self.kwargs)
             params_lists = {}
             config = Config(self.filename)
             for grid_sample in [parse_grid_sample(grid_sample_str) for filename, grid_sample_str in dict(config["Meta"]).items() if filename not in ["version", "id"]]:
