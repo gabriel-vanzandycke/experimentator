@@ -33,13 +33,15 @@ class Config(configparser.ConfigParser):
         super().write(open(filename, "w") )
 
 class ExperimentManager(LazyConfigurable):
-    def __init__(self, filename, gpu, robust=False, name=None, is_training=True):
+    def __init__(self, filename, gpu, robust=False, name=None, is_training=True, **kwargs):
         self.__dict__.pop("experiments", None)
         self.robust = robust
         config = Config(filename)
         self.gpu = gpu
         self.is_training = is_training
         config["Pre"]["GPU"] = "'{}'".format(gpu)
+        for key, value in kwargs.items():
+            config["Pre"][key] = str(value)
         if "Meta" in config.sections():
             self.id = config["Meta"]["id"]
             self.filename = filename

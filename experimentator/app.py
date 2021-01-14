@@ -12,19 +12,25 @@ def run():
     parser.add_argument("--gpu", required=True, help="Default GPU to use")
     parser.add_argument("--robust", action="store_true", help="Should experiments be encapsulated inside a try-except")
     parser.add_argument("--name", default=None, help="Config file name")
+    parser.add_argument("--eager", action="store_true", help="should be run in eagermode")
+    parser.add_argument('--args', nargs=argparse.REMAINDER)
 
     args = parser.parse_args()
-
-    #os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu)
     
     try:
         import provision#from provision import *
     except BaseException as e:
         raise e
+    
+    kwargs = {}
+    if args.args:
+        for arg in args.args:
+            assert "=" in arg, "= not in arg: ".format(arg)
+            name, value = arg.split("=")
+            kwargs[name] = value
+    print("Additional arguments: ", kwargs)
 
-    #from provision import *  # pylint: disable=wildcard-import, unused-wildcard-import, wrong-import-position
-
-    manager = ExperimentManager(find(args.config), robust=args.robust, name=args.name, gpu=args.gpu)
+    manager = ExperimentManager(find(args.config), robust=args.robust, name=args.name, gpu=args.gpu, eager=args.eager, **kwargs)
     if not args.config:
         manager.load()
     if args.epochs < 0:

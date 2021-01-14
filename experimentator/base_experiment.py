@@ -57,8 +57,12 @@ class BaseExperiment(LazyConfigurable):
     def progress(self, generator, **kwargs):
         return tqdm(generator, **kwargs, disable=self.get("hide_progress", False), leave=False)
 
+    @property
+    def batch_size(self):
+        return self["batch_size"]
+
     def batch_generator(self, keys, batch_size=None):
-        batch_size = batch_size or self["batch_size"]
+        batch_size = batch_size or self.batch_size
         # TODO handle balanced batches
         self.batch_count += len(keys)//batch_size
         for keys, batch in self.dataset.batches(keys, batch_size, drop_incomplete=True):
