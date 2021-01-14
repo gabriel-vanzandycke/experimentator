@@ -9,7 +9,7 @@ if False: # pylint: disable=using-constant-test
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 with OutputInhibitor("Tensorflow lib"):
-    import tensorflow.python.autograph.utils.ag_logging # pylint: disable=no-name-in-module
+    import tensorflow.python.autograph.utils.ag_logging # pylint: disable=no-name-in-module, unused-import
     import tensorflow as tf
     tf.get_logger().setLevel(logging.ERROR)
 
@@ -22,6 +22,12 @@ class TensorflowExperiment(BaseExperiment):
         with OutputInhibitor():
             graph = tf.Graph()
         return graph
+
+    def clear_model(self):
+        raise NotImplementedError("problem")
+        for attr_name in ["graph", "optimization_step", "optimizer", "metrics", "session", "loss", "chunk"]:
+            if hasattr(self, attr_name):
+                delattr(self, attr_name)
 
     def init_model(self, weights=None):
         # pylint: disable=pointless-statement
@@ -51,9 +57,13 @@ class TensorflowExperiment(BaseExperiment):
         # TODO: check for "device_filters", "gpu_options", "graph_options", ... in config
         log_device_placement = self.get("log_device_placement", False)
         allow_soft_placement = self.get("allow_soft_placement", False)
-        config = tf.ConfigProto(log_device_placement=log_device_placement, allow_soft_placement=allow_soft_placement)
-        config.gpu_options.visible_device_list = self["GPU"]
-        config.gpu_options.allow_growth = True # pylint: disable=no-member
+        gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.1, visible_device_list=self["GPU"], allow_growth=True)
+        config = tf.ConfigProto(log_device_placement=log_device_placement,
+                                allow_soft_placement=allow_soft_placement,
+                                gpu_options=gpu_options)
+        #print(gpu_options)
+        #config.gpu_options.visible_device_list = self["GPU"]
+        #config.gpu_options.allow_growth = True # pylint: disable=no-member
         with OutputInhibitor():
             sess = tf.Session(config=config, graph=self.graph)
         return sess
@@ -101,17 +111,49 @@ class TensorflowExperiment(BaseExperiment):
     def weights(self):
         return self.get_weights()
 
-    @lazyproperty # done only once in tensorflow: to create the graph
-    def process(self):
+    @lazyproperty
+    def chunk_processors(self):
+        chunk_processors = {}
         with self.graph.as_default():  # pylint: disable=not-context-manager
             with self.graph.device(self.get("device", "/gpu:0")):  # pylint: disable=not-context-manager
                 for ChunkProcessor in self["chunk_processors"]:
                     if ChunkProcessor is None:
                         continue
                     chunk_processor = ChunkProcessor()
-                    chunk_processor.graph = self.graph
-                    with tf.name_scope(chunk_processor.__class__.__name__):
+                    chunk_processors[chunk_processor.__class__.__name__] = chunk_processor
+        return chunk_processors
+
+    @lazyproperty # done only once in tensorflow: to create the graph
+    def process(self):
+        with self.graph.as_default():  # pylint: disable=not-context-manager
+            with self.graph.device(self.get("device", "/gpu:0")):  # pylint: disable=not-context-manager
+                for name, chunk_processor in self.chunk_processors.items():
+                    with tf.name_scope(name):
                         chunk_processor(self.chunk)
+    @lazyproperty
+    def placeholders(self):
+        data = self.dataset.query_item(next(iter(self.dataset.keys)))
+        with self.graph.as_default(): # pylint: disable=not-context-manager
+            with self.graph.device(self.get("device", "/gpu:0")): # pylint: disable=not-context-manager
+                placeholders = {
+                    "is_training":       tf.placeholder(dtype=tf.bool, name="is_training"),
+                    "batch_flag_rotate": tf.placeholder_with_default(input=tf.constant([0], dtype=np.uint8), shape=(1), name="batch_flag_rotate"),
+                    #"learning_rate": tf.placeholder(dtype=tf.float32, name="learning_rate")
+                    "factor":            tf.placeholder_with_default(input=tf.constant([1], dtype=np.float32), shape=(1), name="factor"),
+                }
+
+                for tensor_name in data:
+                    if isinstance(data[tensor_name], (np.ndarray, np.int32, int, float)):
+                        placeholders["batch_{}".format(tensor_name)] = tf.placeholder(
+                            dtype=tf.dtypes.as_dtype(data[tensor_name].dtype),
+                            shape=tuple([None, *data[tensor_name].shape]),
+                            name="batch_{}".format(tensor_name)
+                        )
+                    else:
+                        print("skipping {}: type is {}".format(tensor_name, type(data[tensor_name])))
+        placeholders["width"] = data["input_image"].shape[1]
+        placeholders["height"] = data["input_image"].shape[0]
+        return placeholders
 
     @lazyproperty
     def chunk(self):
@@ -138,7 +180,6 @@ class TensorflowExperiment(BaseExperiment):
             "optimization_step": self.optimization_step
         }
         feed_dict = self.feed_dict({"is_training": True, **data})
-
         results = self.session.run(list(fetches.values()), feed_dict=feed_dict, options=self.run_options, run_metadata=self.run_metadata)
 
         results = dict(zip(fetches.keys(), results))
@@ -159,9 +200,10 @@ class TensorflowExperiment(BaseExperiment):
         results = dict(zip(fetches.keys(), results))
         return results
 
-    def batch_infer(self, data):
+    def batch_infer(self, data, **fetches):
         fetches = {
-            **self.outputs
+            **self.outputs,
+            **fetches
         }
         feed_dict = self.feed_dict({"is_training": False, **data})
         results = self.session.run(list(fetches.values()), feed_dict=feed_dict)
