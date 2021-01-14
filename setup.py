@@ -10,5 +10,13 @@ setup(
     description="My deep-learning experimentation framework",
     version='0.0.1',
     packages=find_packages(),
-    install_requires=["mlworkflow", "dill", "numpy", "matplotlib", "ipywidgets", "tqdm", "IPython"],
+    install_requires=[
+        "mlworkflow",
+        "dill",
+        "numpy",
+        "matplotlib",
+        "ipywidgets",
+        "tqdm",
+        "IPython"
+    ],
 )
