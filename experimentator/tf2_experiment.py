@@ -16,26 +16,31 @@ class TensorflowExperiment(BaseExperiment):
         # pylint: disable=pointless-statement
         tf.config.set_soft_device_placement(False)
         physical_devices = tf.config.list_physical_devices('GPU')
-        tf.config.set_visible_devices(physical_devices[int(self["GPU"])], device_type="GPU")
-        tf.config.experimental.set_memory_growth(physical_devices[int(self["GPU"])], enable=True)
+        if physical_devices and self.get("GPU", "None") != "None":
+            tf.config.set_visible_devices(physical_devices[int(self["GPU"])], device_type="GPU")
+            tf.config.experimental.set_memory_growth(physical_devices[int(self["GPU"])], enable=True)
         tf.config.run_functions_eagerly(self.get("eager", False))
         print(tf.config.get_visible_devices())
         
         self.process # as a lazyproperty (no need to use the parenthisis)
         
-        self.metrics
         random_seed = int(self["manager_id"].replace("_","")[4:])
         #tf.set_random_seed(random_seed)
         np.random.seed(random_seed)
         random.seed(random_seed)
         # if weights is None and "weights" in self.logger:
         #     try:
-        #         weights = self.logger["weights"]
+        #         tf.keras.models.load_model(self.logger["weights"])
         #     except FileNotFoundError:
         #         print("Last weights have been deleted. Using random weights.")
         # if weights is not None:
-        #     self.set_weights(weights)
-
+        #     tf.keras.models.load_model(weights)
+    @lazyproperty
+    def metrics(self):
+        return {}
+    @lazyproperty
+    def outputs(self):
+        return {}
     @lazyproperty
     def optimizer(self):
         with self.graph.device(self.get("device", "/gpu:0")): # pylint: disable=not-context-manager
@@ -44,20 +49,23 @@ class TensorflowExperiment(BaseExperiment):
         return optimizer
 
     # set weights from variable
-    def set_weights(self, weights):
+    def load_weights(self, filename):
         print("Loading weights...", end="")
-        var_list = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
-        self.session.run([k.assign(v) for k, v in zip(var_list, weights)])
+        model.load_weights("filename")
         print(" Done.")
 
     # get weights from variable
-    def get_weights(self):
-        var_list = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
-        return self.session.run(var_list)
+    def save_weights(self, filename):
+        print("Saving weights...", end="")
+        model.save_weights("filename")
+        print(" Done.")
 
     @property
     def weights(self):
-        return 0#self.get_weights()
+        raise NotImplementedError()# should use save_weiths instead of save_model
+        # filepath = os.path.join(self.logger.directory, "{}_model".format(len(self.logger)))
+        # tf.keras.models.save_model(self.eval_model, filepath, save_traces=False)
+        # return filepath
 
     @property
     def device(self):
@@ -83,7 +91,7 @@ class TensorflowExperiment(BaseExperiment):
     @lazyproperty
     def inputs(self):
         data = self.dataset.query_item(next(iter(self.dataset.keys)))
-        with tf.device(self.device):
+        if True:#with tf.device(self.device):
             inputs = {
                 "flag_rotate": tf.keras.Input(shape=(1), name="flag_rotate"),
             }
@@ -183,3 +191,22 @@ class TensorflowExperiment(BaseExperiment):
         flops = tf.profiler.profile(self.graph, options=opt)
         total_flops = flops.total_float_ops
         print("frozen graph saved in '{}' with {} flops".format(filename, total_flops))
+
+
+
+# class SaveWeights(Callback):
+#     def __init__(self, exp):
+#         self.logger = exp.logger
+#         self.subsets = exp.subsets
+#     def on_cycle_end(self, subset_name, state, **_):
+#         if [s for s in self.subsets if s.name == subset_name][0].mode == "EVAL":
+
+#         self.subset_names.add(subset_name)
+#         subset_metrics = dict(state) # dict() makes a copy of "state"
+#         self.logger["{}_metrics".format(subset_name)] = subset_metrics
+#     def on_epoch_begin(self, state, **_):
+#         self.logger["metrics"] = list(state.keys())
+#         # clear metrics
+#         for subset_name in self.subset_names:
+#             subset_metrics = dict(state)
+#             self.logger["{}_metrics".format(subset_name)] = subset_metrics
