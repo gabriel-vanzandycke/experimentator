@@ -22,6 +22,7 @@ from .base_experiment import NotebookExperiment
 
 colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
 
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2" # needs to be placed before any 'import tensorflow' statement
 
 class Config(configparser.ConfigParser):
     def __init__(self, filename):
@@ -46,9 +47,11 @@ class ExperimentManager(LazyConfigurable):
             self.id = config["Meta"]["id"]
             self.filename = filename
         else:
+            filename = os.path.basename(filename)[:-4]
             self.id = datetime()["dt"]
             config["Meta"] = {"id": self.id, "version": 2}
-            self.filename = "{}_{}.ini".format(name or os.path.basename(filename)[:-4], self.id)
+            config["Pre"]["project_name"] = str("'"+filename+"'")
+            self.filename = "{}_{}.ini".format(name or filename, self.id)
             config.write(self.filename)
 
     @lazyproperty
