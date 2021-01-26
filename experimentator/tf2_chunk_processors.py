@@ -36,6 +36,15 @@ class SigmoidCrossEntropyLossMap(ChunkProcessor):
         batch_target = chunk["batch_target"] if len(chunk["batch_target"].shape) == 4 else tf.expand_dims(chunk["batch_target"], -1)
         chunk["loss_map"] = tf.keras.losses.binary_crossentropy(batch_target, chunk["batch_logits"], from_logits=True)
 
+class GlobalMaxPoolingLogits(ChunkProcessor):
+    def __call__(self, chunk):
+        chunk["batch_logits"] = tf.reduce_max(chunk["batch_logits"], axis=[1,2])
+
+class GlobalAvgPoolingLogits(ChunkProcessor):
+    def __call__(self, chunk):
+        chunk["batch_logits"] = tf.reduce_mean(chunk["batch_logits"], axis=[1,2])
+
+
 # from tf1, untested
 
 class UnSparsify(ChunkProcessor):
