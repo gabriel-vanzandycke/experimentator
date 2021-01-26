@@ -13,6 +13,27 @@ class Callback():
         if cb:
             cb(**state, state=state) # pylint: disable=not-callable
 
+class InitState(Callback):
+    def on_epoch_begin(self, state, **_):
+        for key in [k for k in state if k!= "epoch"]:
+            state[key] = np.nan
+
+class LogState(Callback):
+    precedence = 100 # very last
+    subset_names = set()
+    def __init__(self, exp):
+        self.logger = exp.logger
+    def on_cycle_end(self, subset_name, state, **_):
+        self.subset_names.add(subset_name)
+        subset_metrics = dict(state) # dict() makes a copy of "state"
+        self.logger["{}_metrics".format(subset_name)] = subset_metrics
+    def on_epoch_begin(self, state, **_):
+        self.logger["metrics"] = list(state.keys())
+        # clear metrics
+        for subset_name in self.subset_names:
+            subset_metrics = dict(state)
+            self.logger["{}_metrics".format(subset_name)] = subset_metrics
+
 class AverageLoss(Callback):
     def on_cycle_begin(self, **_):
         self.loss = []
@@ -40,27 +61,10 @@ class MeasureTime(Callback):
         toc_epoch = time.time()
         state["epoch_time"] = toc_epoch - self.tic_epoch
 
-class LogState(Callback):
-    precedence = 100 # very last
-    subset_names = set()
-    def __init__(self, exp): # pylint: disable=super-init-not-called
-        self.logger = exp.logger
-    def on_cycle_end(self, subset_name, state, **_):
-        self.subset_names.add(subset_name)
-        subset_metrics = dict(state) # dict() makes a copy of "state"
-        self.logger["{}_metrics".format(subset_name)] = subset_metrics
-    def on_epoch_begin(self, state, **_):
-        self.logger["metrics"] = list(state.keys())
-        for key in [k for k in state if k!= "epoch"]:
-            state[key] = np.nan
-        # clear metrics
-        for subset_name in self.subset_names:
-            subset_metrics = dict(state)
-            self.logger["{}_metrics".format(subset_name)] = subset_metrics
 
 class ProfileBatch(Callback):
     precedence = 95 # almost last
-    def __init__(self, exp): # pylint: disable=super-init-not-called
+    def __init__(self, exp):
         self.loggdir = exp.get("loggdir", "profiler_logs")
         self.profiler = tf.profiler.Profiler(graph=exp.graph)
         self.exp = exp
