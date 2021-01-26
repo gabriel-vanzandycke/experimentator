@@ -46,13 +46,10 @@ class BaseExperiment(LazyConfigurable):
         dataset = RobustBatchesDataset(dataset)
         return dataset
 
-    def subsets_init(self):
-        keys_splitter = self["keys_splitter"]()
-        return keys_splitter(self.dataset.keys, fold=self.get("fold", default=0))
-
     @lazyproperty
     def subsets(self):
-        return self.subsets_init()
+        keys_splitter = self["keys_splitter"]()
+        return keys_splitter(self.dataset.keys, fold=self.get("fold", default=0))
 
     def progress(self, generator, **kwargs):
         return tqdm(generator, **kwargs, disable=self.get("hide_progress", False), leave=False)
@@ -121,13 +118,15 @@ class CallbackedExperiment(BaseExperiment): # pylint: disable=abstract-method
         for cb in self.callbacks:
             cb.fire(event, self.state)
 
+    @lazyproperty
+    def metrics(self):
+        return {}
+
     def run_batch(self, data, *args, **kwargs):
         self.state["batch_id"] = self.state["batch_id"] + 1
-        self.state["data"] = data
         self.fire("batch_begin")
         result = super().run_batch(data=data, *args, **kwargs)
         self.state.update(**{k:v for k,v in result.items() if k in list(self.metrics.keys())+["loss"]})
-        del self.state["data"]
         self.fire("batch_end")
         return result
 
@@ -162,13 +161,6 @@ class LoggedExperiment(BaseExperiment):
         logger["cfg"] = self.cfg
         return logger
 
-    @lazyproperty
-    def subsets(self):
-        # Note: cannot use dict.set_default(key, fun()) because fun() would be called anyway
-        if "subsets" not in self.logger:
-            self.logger["subsets"] = self.subsets_init()
-        return self.logger["subsets"]
-
     @property
     def weights(self):
         raise NotImplementedError("Should be implemented in the framework specific Experiment.")
@@ -184,7 +176,9 @@ class LoggedExperiment(BaseExperiment):
         self.logger["learning_rate"] = self.learning_rate
         self.logger["batch_size"] = self["batch_size"]
         # Save weights
-        self.logger["weights"] = self.weights
+        if self["save_weights"] == "all":
+            self.logger["weights"] = self.weights
+        self.logger["subset_names"] = [s.name for s in self.subsets]
         # Checkpoint logs
         self.logger.checkpoint()
         # Prevent stagnation
@@ -245,7 +239,7 @@ class NotebookExperiment(LoggedExperiment, LazyConfigurable):  # pylint: disable
             return tqdm_notebook(generator, **kwargs, disable=self.get("hide_progress", False), leave=False)
 
     def plot_metrics(self, metrics_names=None, subsets_names=None, fig=None, figsize=None):
-        subsets_names = subsets_names or [s.name for s in self.subsets]
+        subsets_names = subsets_names or self.logger["subset_names"]
         metrics_names = metrics_names or [m for m in self.logger["metrics"] if m not in ["subset_name"]]#["accuracy", "batch_time", "precision", "recall", "loss"]#self.logger["metrics"]
         axes = build_metrics_axes(metrics_names, figsize) if fig is None else fig.get_axes()
         for subset in [s for s in self.subsets if s.name in subsets_names]:
@@ -259,7 +253,10 @@ class NotebookExperiment(LoggedExperiment, LazyConfigurable):  # pylint: disable
                 if np.any(data):
                     if metric_name == "loss" and subset.name == "training" and data.shape[0] > 3:
                         avg = np.nanmean(data[1:])
-                        ax.set_ylim([0, 2*avg])
+                        try:
+                            ax.set_ylim([0, 2*avg])
+                        except ValueError:
+                            pass
                     if "time" in metric_name and subset.name == "training" and not np.isnan(data).any():
                         ax.set_ylim([0, 11*np.nanmax(data)/10])
 
