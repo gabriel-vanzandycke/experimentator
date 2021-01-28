@@ -18,7 +18,7 @@ from mlworkflow import find_files, get_callable, exec_dict, LazyConfigurable, la
 
 from .utils import datetime, Callable, DataCollector, mkdir
 
-from .base_experiment import NotebookExperiment
+from .logger_experiment import NotebookExperiment
 
 colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
 
@@ -33,6 +33,8 @@ class Config(configparser.ConfigParser):
     def write(self, filename):
         super().write(open(filename, "w") )
 
+
+
 class ExperimentManager(LazyConfigurable):
     def __init__(self, filename, gpu, robust=False, name=None, is_training=True, **kwargs):
         self.__dict__.pop("experiments", None)
@@ -40,7 +42,7 @@ class ExperimentManager(LazyConfigurable):
         config = Config(filename)
         self.gpu = gpu
         self.is_training = is_training
-        config["Pre"]["GPU"] = "'{}'".format(gpu)
+        config["Pre"]["GPU"] = "[{}]".format(gpu)
         for key, value in kwargs.items():
             config["Pre"][key] = str(value)
         if "Meta" in config.sections():

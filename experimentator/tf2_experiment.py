@@ -1,118 +1,84 @@
-import os
 import random
-import logging
 import numpy as np
+import tensorflow as tf
+from tensorflow.python.client import timeline # pylint: disable=no-name-in-module, unused-import
+
 from .base_experiment import BaseExperiment, lazyproperty
-from .utils import OutputInhibitor
+
 if False: # pylint: disable=using-constant-test
     lazyproperty = property
-import tensorflow as tf
+
 
 class TensorflowExperiment(BaseExperiment):
     run_options = None  # overwritten by callbacks
     run_metadata = None # overwritten by callbacks
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
-    def init_model(self, weights=None):
-        # pylint: disable=pointless-statement
-        tf.config.set_soft_device_placement(False)
-        physical_devices = tf.config.list_physical_devices('GPU')
-        if physical_devices and self.get("GPU", "None") != "None":
-            tf.config.set_visible_devices(physical_devices[int(self["GPU"])], device_type="GPU")
-            tf.config.experimental.set_memory_growth(physical_devices[int(self["GPU"])], enable=True)
-        tf.config.run_functions_eagerly(self.get("eager", False))
-        print(tf.config.get_visible_devices())
-        
-        self.process # as a lazyproperty (no need to use the parenthisis)
-        
         random_seed = int(self["manager_id"].replace("_","")[4:])
-        #tf.set_random_seed(random_seed)
+        tf.random.set_seed(random_seed)
         np.random.seed(random_seed)
         random.seed(random_seed)
-        # if weights is None and "weights" in self.logger:
-        #     try:
-        #         tf.keras.models.load_model(self.logger["weights"])
-        #     except FileNotFoundError:
-        #         print("Last weights have been deleted. Using random weights.")
-        # if weights is not None:
-        #     tf.keras.models.load_model(weights)
+
+        tf.config.set_soft_device_placement(False)
+        physical_devices = tf.config.list_physical_devices('GPU')
+        if physical_devices and self.get("GPU", None) is not None:
+            visible_devices = [physical_devices[int(i)] for i in self["GPU"]]
+            tf.config.set_visible_devices(visible_devices, device_type="GPU")
+            for device in visible_devices:
+                tf.config.experimental.set_memory_growth(device, enable=True)
+        tf.config.run_functions_eagerly(self.get("eager", False))
+        print(tf.config.get_visible_devices())
+
     @lazyproperty
     def metrics(self):
         return {}
+
     @lazyproperty
     def outputs(self):
         return {}
+
     @lazyproperty
     def optimizer(self):
-        with self.graph.device(self.get("device", "/gpu:0")): # pylint: disable=not-context-manager
-            with tf.name_scope("optimizer"):
-                optimizer = self["optimizer"]()
-        return optimizer
+        return self["optimizer"]()
 
-    # set weights from variable
     def load_weights(self, filename):
-        print("Loading weights...", end="")
-        model.load_weights("filename")
-        print(" Done.")
+        self.train_model.load_weights(filename)
 
-    # get weights from variable
     def save_weights(self, filename):
-        print("Saving weights...", end="")
-        model.save_weights("filename")
-        print(" Done.")
-
-    @property
-    def weights(self):
-        raise NotImplementedError()# should use save_weiths instead of save_model
-        # filepath = os.path.join(self.logger.directory, "{}_model".format(len(self.logger)))
-        # tf.keras.models.save_model(self.eval_model, filepath, save_traces=False)
-        # return filepath
-
-    @property
-    def device(self):
-        return "/gpu:{}".format(self["GPU"])
-
-    @lazyproperty
-    def chunk_processors(self):
-        chunk_processors = {}
-        for ChunkProcessor in self["chunk_processors"]:
-            if ChunkProcessor is None:
-                continue
-            chunk_processor = ChunkProcessor()
-            chunk_processors[chunk_processor.__class__.__name__] = chunk_processor
-        return chunk_processors
-
-    @lazyproperty # done only once in tensorflow: to create the graph
-    def process(self):
-        if True:#with tf.device(self.device):
-            for name, chunk_processor in self.chunk_processors.items():
-                with tf.name_scope(name):
-                    chunk_processor(self.chunk)
+        self.train_model.save_weights(filename)
 
     @lazyproperty
     def inputs(self):
         data = self.dataset.query_item(next(iter(self.dataset.keys)))
-        if True:#with tf.device(self.device):
-            inputs = {
-                "flag_rotate": tf.keras.Input(shape=(1), name="flag_rotate"),
-            }
-            skipped = []
-            for tensor_name in data:
-                if isinstance(data[tensor_name], (np.ndarray, np.int32, int, float)):
-                    inputs["batch_{}".format(tensor_name)] = tf.keras.Input(
-                        dtype=tf.dtypes.as_dtype(data[tensor_name].dtype),
-                        shape=data[tensor_name].shape,
-                        name="batch_{}".format(tensor_name)
-                    )
-                else:
-                    skipped.append(tensor_name)
-            print("Skipped inputs: " + ", ".join(["{}({})".format(name, data[name]) for name in skipped]))
-        #inputs["width"] = data["input_image"].shape[1] # doesn't work with model expecting tensors as input and not values
-        #inputs["height"] = data["input_image"].shape[0] # doesn't work
+        inputs = {
+            "flag_rotate": tf.keras.Input(shape=(1), name="flag_rotate"),
+        }
+        skipped = []
+        for tensor_name in data:
+            if isinstance(data[tensor_name], (np.ndarray, np.int32, int, float)):
+                inputs["batch_{}".format(tensor_name)] = tf.keras.Input(
+                    dtype=tf.dtypes.as_dtype(data[tensor_name].dtype),
+                    shape=data[tensor_name].shape,
+                    name="batch_{}".format(tensor_name)
+                )
+            else:
+                skipped.append(tensor_name)
+        print("Skipped inputs: " + ", ".join(["{}({})".format(name, data[name]) for name in skipped]))
         return inputs
 
     @lazyproperty
+    def chunk_processors(self):
+        # cannot be a dict in case a ChunkProcessor is used twice
+        return [CP() for CP in self["chunk_processors"] if CP is not None]
+
+    @lazyproperty
     def chunk(self):
-        return self.inputs.copy() # copies the dictionary, but not its values (passed by reference)
+        chunk = self.inputs.copy() # copies the dictionary, but not its values (passed by reference) to be used again in the model definition
+        for chunk_processor in self.chunk_processors:
+            with tf.name_scope(chunk_processor.__class__.__name__):
+                chunk_processor(chunk)
+        return chunk
 
     @lazyproperty
     def train_model(self):
@@ -125,14 +91,6 @@ class TensorflowExperiment(BaseExperiment):
     @lazyproperty
     def infer_model(self):
         return tf.keras.Model(self.inputs, self.outputs)
-
-    @lazyproperty
-    def optimizer(self):
-        if True: #with tf.graph(self.device):
-            with tf.name_scope("optimizer"):
-                optimizer = self["optimizer"]()
-        return optimizer
-
 
     @tf.function
     def _batch_train(self, inputs):
@@ -150,10 +108,6 @@ class TensorflowExperiment(BaseExperiment):
     def _batch_infer(self, inputs):
         return self.infer_model(inputs, training=False)
 
-    @property
-    def learning_rate(self):
-        return 42
-
     def batch_train(self, data):
         inputs = {k:v for k,v in {"flag_rotate": np.array([0]*self.batch_size), **data}.items() if k in self.inputs}
         return self._batch_train(inputs)
@@ -164,49 +118,112 @@ class TensorflowExperiment(BaseExperiment):
         inputs = {k:v for k,v in {"flag_rotate": np.array([0]*self.batch_size), **data}.items() if k in self.inputs}
         return self._batch_infer(inputs)
 
-    def freeze(self, filename, output_nodes_names=None):
-        """Freezes the state of a session into a pruned computation graph.
-        Creates a new computation graph where variable nodes are replaced by
-        constants taking their current value in the session. The new graph will be
-        pruned so subgraphs that are not necessary to compute the requested
-        outputs are removed.
-        @param session The TensorFlow session to be frozen.
-        @param keep_var_names A list of variable names that should not be frozen,
-                            or None to freeze all the variables in the graph.
-        @param output_names Names of the relevant graph outputs.
-        @param clear_devices
-        @return The frozen graph definition.
-        """
-        assert filename[-3:] == ".pb", "You must provide a *.pb file"
-        output_nodes_names = output_nodes_names or list(self.outputs.keys())
-        # Remove the device directives from the graph for better portability
-        graph_definition = self.graph.as_graph_def()
-        for node in graph_definition.node: # pylint: disable=no-member
-            node.device = ""
-        frozen_graph = tf.compat.v1.graph_util.convert_variables_to_constants(self.session, graph_definition, output_nodes_names)
-        tf.train.write_graph(frozen_graph, os.path.dirname(filename), os.path.basename(filename), as_text=False)
-
-        # compute the number of flops
-        opt = tf.profiler.ProfileOptionBuilder.float_operation()
-        flops = tf.profiler.profile(self.graph, options=opt)
-        total_flops = flops.total_float_ops
-        print("frozen graph saved in '{}' with {} flops".format(filename, total_flops))
 
 
+#     def freeze(self, filename, output_nodes_names=None):
+#         """Freezes the state of a session into a pruned computation graph.
+#         Creates a new computation graph where variable nodes are replaced by
+#         constants taking their current value in the session. The new graph will be
+#         pruned so subgraphs that are not necessary to compute the requested
+#         outputs are removed.
+#         @param session The TensorFlow session to be frozen.
+#         @param keep_var_names A list of variable names that should not be frozen,
+#                             or None to freeze all the variables in the graph.
+#         @param output_names Names of the relevant graph outputs.
+#         @param clear_devices
+#         @return The frozen graph definition.
+#         """
+#         assert filename[-3:] == ".pb", "You must provide a *.pb file"
+#         output_nodes_names = output_nodes_names or list(self.outputs.keys())
+#         # Remove the device directives from the graph for better portability
+#         graph_definition = self.graph.as_graph_def()
+#         for node in graph_definition.node: # pylint: disable=no-member
+#             node.device = ""
+#         frozen_graph = tf.compat.v1.graph_util.convert_variables_to_constants(self.session, graph_definition, output_nodes_names)
+#         tf.train.write_graph(frozen_graph, os.path.dirname(filename), os.path.basename(filename), as_text=False)
 
-# class SaveWeights(Callback):
+#         # compute the number of flops
+#         opt = tf.profiler.ProfileOptionBuilder.float_operation()
+#         flops = tf.profiler.profile(self.graph, options=opt)
+#         total_flops = flops.total_float_ops
+#         print("frozen graph saved in '{}' with {} flops".format(filename, total_flops))
+
+
+
+
+# class ProfileBatch(Callback):
+#     precedence = 95 # almost last
 #     def __init__(self, exp):
-#         self.logger = exp.logger
-#         self.subsets = exp.subsets
-#     def on_cycle_end(self, subset_name, state, **_):
-#         if [s for s in self.subsets if s.name == subset_name][0].mode == "EVAL":
+#         self.loggdir = exp.get("loggdir", "profiler_logs")
+#         self.profiler = tf.profiler.Profiler(graph=exp.graph)
+#         self.exp = exp
+#         self.summary = tf.summary.FileWriter(self.loggdir + '/train', graph=exp.graph, session=exp.session)
+#         self.target_batch = 10
 
-#         self.subset_names.add(subset_name)
-#         subset_metrics = dict(state) # dict() makes a copy of "state"
-#         self.logger["{}_metrics".format(subset_name)] = subset_metrics
-#     def on_epoch_begin(self, state, **_):
-#         self.logger["metrics"] = list(state.keys())
-#         # clear metrics
-#         for subset_name in self.subset_names:
-#             subset_metrics = dict(state)
-#             self.logger["{}_metrics".format(subset_name)] = subset_metrics
+#     def on_batch_begin(self, batch_id, **_):
+#         if batch_id != self.target_batch:
+#             return
+#         #tf.summary.trace_on(graph=True, profiler=True)
+#         self.exp.run_metadata = tf.RunMetadata()
+#         self.exp.run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE) # pylint: disable=no-member
+#         # tf.profiler.experimental.start(
+#         #     self.loggdir, tf.profiler.ProfilerOptions(host_tracer_level=2)
+#         # )
+#     def on_batch_end(self, batch_id, subset, **_):
+#         key = "{}_{}_{}".format(self.exp["experiment_id"], subset, batch_id)
+#         if batch_id != self.target_batch:
+#             return
+
+#         if False:
+#             # with self.summary.as_default():
+#             #     for metric in self.exp.metrics.keys():
+#             #         tf.summary.scalar(metric, state[metric], step=batch_id)
+#             #     tf.summary.trace_export(
+#             #         name="func_trace",
+#             #         step=batch_id,
+#             #         profiler_outdir=self.loggdir
+#             #     )
+#             self.summary.add_run_metadata(self.exp.run_metadata, "run_metadata", batch_id)
+#             # for metric_name in self.exp.metrics.keys():
+#             #     tf.summary.scalar(metric_name, state[metric_name])
+#             #     self.summary.add_summary()#, step=batch_id))
+
+#             self.profiler.add_step(batch_id, self.exp.run_metadata)
+
+
+#             #self.profiler.profile_operations(opts)
+
+#             # opts = (tf.profiler.ProfileOptionBuilder()
+#             #     .with_max_depth(10)
+#             #     .with_min_micros(1000)
+#             #     .select(['accelerator_micros'])
+#             #     .with_stdout_output()
+#             #     .build())
+#             #     #.time_and_memory()
+#             #     #.with_stdout_output()
+#             #     #.build())
+
+#             # Or you can generate a timeline:
+
+#         opts = (tf.profiler.ProfileOptionBuilder(
+#                 tf.profiler.ProfileOptionBuilder.time_and_memory())
+#                 .with_step(batch_id)
+#                 .with_timeline_output("{}_timeline.ctf".format(key)).build())
+#         self.profiler.profile_graph(options=opts)
+
+#         if True:
+#             opts = (tf.profiler.ProfileOptionBuilder(
+#                     tf.profiler.ProfileOptionBuilder.time_and_memory())
+#                     .with_step(batch_id)
+#                     .with_timeline_output("{}_timeline_python.ctf".format(key)).build())
+#             self.profiler.profile_python(options=opts)
+#             #tf.profiler.experimental.stop()
+#         #
+#         #
+#         if True:
+#             tl = timeline.Timeline(self.exp.run_metadata.step_stats) # pylint: disable=no-member
+#             with open("tf_timeline_{}".format(key), 'w') as f:
+#                 f.write(tl.generate_chrome_trace_format())
+
+#         self.exp.run_metadata = None
+#         self.exp.run_options = None

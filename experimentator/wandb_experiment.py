@@ -1,25 +1,25 @@
-import wandb
 import json
-import numpy as np
-from mlworkflow import lazyproperty
-from .base_experiment import BaseExperiment
-from .callbacks import Callback
-
-class WandBExperiment(BaseExperiment):
-    @lazyproperty
-    def wandb(self):
-        wandb.init(project=self.cfg.get("project_name", "none"), reinit=True, config=self.cfg)
-        wandb.run.name = json.dumps(self.grid_sample)
-        return wandb
+import wandb
+from .callbacked_experiment import Callback
 
 class LogStateWandB(Callback):
     precedence = 100 # very last
     def __init__(self, exp): # pylint: disable=super-init-not-called
-        self.wandb = exp.wandb
+        project_name = exp.get("project_name", "unknown_project")
+        grid_sample = dict(exp.grid_sample) # copies the original dictionary
+        grid_sample.pop("fold", None)       # removes 'fold' to be able to group runs
+        run_name = json.dumps(grid_sample)
+        wandb.init(
+            project=project_name,
+            reinit=True,
+            config=exp.cfg,
+            settings=wandb.Settings(show_emoji=False)
+        )
+        wandb.run.name = run_name
     def on_epoch_begin(self, **_):
         self.state = {}
-    def on_cycle_end(self, subset_name, state, **_):
-        self.state.update({subset_name + "_" + k: v for k,v in state.items()})
+    def on_cycle_end(self, subset, state, **_):
+        self.state.update({subset + "_" + k: v for k,v in state.items()})
     def on_epoch_end(self, **_):
-        self.wandb.log(self.state) # log *once* per epoch
+        wandb.log(self.state) # log *once* per epoch
 
