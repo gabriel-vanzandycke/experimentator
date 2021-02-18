@@ -8,7 +8,7 @@ setup(
     licence="LGPL",
     python_requires='>=3.6',
     description="My deep-learning experimentation framework",
-    version='1.0.0',
+    version='1.2.0',
     packages=find_packages(),
     install_requires=[
         "mlworkflow",
