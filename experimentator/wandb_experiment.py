@@ -1,3 +1,4 @@
+import os
 import json
 import wandb
 from .callbacked_experiment import Callback
@@ -5,6 +6,7 @@ from .callbacked_experiment import Callback
 class LogStateWandB(Callback):
     precedence = 100 # very last
     def __init__(self, exp): # pylint: disable=super-init-not-called
+        os.environ["WANDB_SILENT"] = "true"
         project_name = exp.get("project_name", "unknown_project")
         grid_sample = dict(exp.grid_sample) # copies the original dictionary
         grid_sample.pop("fold", None)       # removes 'fold' to be able to group runs
@@ -16,6 +18,8 @@ class LogStateWandB(Callback):
             settings=wandb.Settings(show_emoji=False, show_info=False, show_warnings=False)
         )
         wandb.run.name = run_name
+    def __del__(self):
+        wandb.finish()
     def on_epoch_begin(self, **_):
         self.state = {}
     def on_cycle_end(self, subset, state, **_):
