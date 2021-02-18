@@ -54,7 +54,8 @@ class TensorflowExperiment(BaseExperiment):
                 )
             else:
                 skipped.append(tensor_name)
-        print("Skipped inputs: " + ", ".join(["{}({})".format(name, data[name]) for name in skipped]))
+        if skipped:
+            print("Skipped inputs: " + ", ".join(["{}({})".format(name, data[name]) for name in skipped]))
         return inputs
 
     @lazyproperty
