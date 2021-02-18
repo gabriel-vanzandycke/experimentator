@@ -1,5 +1,4 @@
-import argparse
-from .manager2 import main
+from .manager import main
 
 
 if __name__ == "__main__":

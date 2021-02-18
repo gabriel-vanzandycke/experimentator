@@ -2,9 +2,11 @@ import argparse
 import ast
 import datetime
 from enum import Enum
-#import fileinput
 import itertools
 import os
+import time
+import threading
+
 import astunparse
 from mlworkflow import SideRunner, lazyproperty
 from .utils import find
@@ -17,18 +19,19 @@ def product_kwargs(**kwargs):
         raise
     yield from [dict(kv) for kv in itertools.product(*kvs)]
 
-def update_ast_tree(tree, overwrite):
+def update_ast(tree, overwrite):
+    met_targets = []
     for node in tree.body:
         if not isinstance(node, ast.Assign):
             continue
         for target in node.targets:
-            if not isinstance(target, ast.Name):
-                # Deal with tuple assignments (a,b = 1,2)
-                continue
+            assert isinstance(target, ast.Name), "Tuple assignation is not allowed in config files (e.g. `a,b=1,2`). {}".format(type(target))
+            assert target.id not in met_targets, "Double assignation is not allowed in config files. The variable assigned twice is '{}'".format(target.id)
             if target.id in overwrite:
                 assert isinstance(node.value, ast.Constant), "Only overwritting constants is currently supported"
                 # Replace node value by the value in overwrite
                 node.value.value = overwrite.pop(target.id)
+                met_targets.append(target.id)
     # Add remaining keys
     for key, value in overwrite.items():
         tree.body.append(ast.Assign([ast.Name(id=key, ctx=ast.Store())], ast.Constant(value, kind=None)))
@@ -46,26 +49,31 @@ class JobStatus(Enum):
     DONE = 3
 
 class Job():
-    def __init__(self, filename, config, grid_sample=None):
+    def __init__(self, filename, config_str, grid_sample=None):
         self.filename = filename
-        self.config = config
+        self.config_str = config_str
         self.grid_sample = grid_sample or {}
         self.status = JobStatus.TODO
 
     @lazyproperty
-    def exp(self):
-        os.sys.path.insert(0, os.getcwd())
+    def config(self):
         config = {}
-        exec(self.config, None, config) # pylint: disable=exec-used
-        config = {**config, "grid_sample": self.grid_sample, "config": self.config, "filename": self.filename}
-        return type("Exp", tuple(config["experiment_type"][::-1]), {})(config)
+        exec(self.config_str, None, config) # pylint: disable=exec-used
+        return {**config, "grid_sample": self.grid_sample, "filename": self.filename}# "config_str": self.config_str, 
+
+    @lazyproperty
+    def exp(self):
+        #os.sys.path.insert(0, os.getcwd())
+        return type("Exp", tuple(self.config["experiment_type"][::-1]), {})(self.config)
 
     def run(self, **kwargs):
         try:
             self.status = JobStatus.BUSY
-            self.exp.update(**kwargs)
-            self.exp.cfg["experiment_id"] = datetime.datetime.now().strftime("%Y%m%d_%H%M%S.%f")
-            self.exp.cfg["project_name"] = os.path.splitext(os.path.basename(self.exp.cfg["filename"]))[0]
+            self.config.update(
+                experiment_id=datetime.datetime.now().strftime("%Y%m%d_%H%M%S.%f"),
+                project_name=os.path.splitext(os.path.basename(self.filename))[0],
+                worker_id=kwargs["worker_ids"][threading.get_ident()],
+                **kwargs)
             self.exp.train(epochs=kwargs["epochs"])
         except:
             self.status = JobStatus.FAIL
@@ -76,9 +84,6 @@ class Job():
 class ExperimentManager():
     def __init__(self, filename, num_workers=0, **grid_search):
         print("config: {}\tgrid_search: {}".format(filename, grid_search), flush=True)
-        #self.filename = filename                                                  # unused
-        #self.basename = os.path.basename(self.filename)                           # unused
-        #self.datetime_suffix = datetime.datetime.now().strftime("_%Y%m%d_%H%M%S") # unused
         self.side_runner = SideRunner(thread_count=num_workers) if num_workers > 0 else None
 
         with open(find(filename)) as f:
@@ -88,14 +93,24 @@ class ExperimentManager():
                 self.jobs = []
                 tree = ast.parse(f.read())
                 for grid_sample in product_kwargs(**grid_search):
-                    update_ast_tree(tree, dict(grid_sample)) # dict makes a copy
-                    self.jobs.append(Job(filename, config=astunparse.unparse(tree), grid_sample=grid_sample))
+                    update_ast(tree, dict(grid_sample)) # dict makes a copy
+                    self.jobs.append(Job(filename, config_str=astunparse.unparse(tree), grid_sample=grid_sample))
+
+    @lazyproperty
+    def worker_ids(self):
+        def f(x):
+            time.sleep(.1)
+            return threading.get_ident(), x
+        if not self.side_runner:
+            return dict({f(0)})
+        return dict(self.side_runner.pool.map(f, range(self.side_runner.thread_count), 1))
 
     def execute(self, epochs, **kwargs):
-        print("overridden config {}".format(kwargs))
+        print("overridden config: {}".format(kwargs))
         for job in self.jobs:
             if job.status == JobStatus.TODO:
                 print("Doing {}".format(job.grid_sample), flush=True)
+                kwargs.update(worker_ids=self.worker_ids)
                 self.side_runner.do(Job.run, job, epochs=epochs, **kwargs) if self.side_runner else job.run(epochs=epochs, **kwargs) # pylint: disable=expression-not-assigned
 
 def main():
