@@ -1,34 +1,40 @@
 import os
 from tqdm import tqdm
 
-from mlworkflow import SideRunner, LazyConfigurable, lazyproperty, TransformedDataset, PickledDataset, pickle_or_load
+from mlworkflow import SideRunner, lazyproperty, TransformedDataset, PickledDataset, pickle_or_load
 from .utils import find, transforms_to_name, mkdir, RobustBatchesDataset
 
-class BaseExperiment(LazyConfigurable):
+
+class BaseExperiment():
     batch_count = 0
+    def __init__(self, config):
+        self.cfg = config
 
     def __del__(self):
         pass
+
+    def update(self, **kwargs):
+        self.cfg.update(**kwargs)
 
     def get(self, key, default):
         return self.cfg.get(key, default)
 
     @property
-    def epoch(self):
+    def epochs(self):
         return 0 # can be overwritten in a LoggedExperiment to continue a loaded traning
 
     @lazyproperty
     def grid_sample(self):
-        return dict(self.cfg.get("grid_sample", {}))
+        return self.cfg["grid_sample"]
 
     @lazyproperty
     def dataset(self):
-        dataset_name = self["dataset_name"]
+        dataset_name = self.cfg["dataset_name"]
         dataset = PickledDataset(find(dataset_name, verbose=False))
         dataset_folder = os.environ["SSD_DATASETS_FOLDER"]
 
-        early_transforms = [t() for t in self.get("early_transforms", [])]
-        late_transforms = [t() for t in self.get("late_transforms", [])]
+        early_transforms = [t for t in self.get("early_transforms", [])]
+        late_transforms = [t for t in self.get("late_transforms", [])]
         if early_transforms:
             dataset = TransformedDataset(dataset, early_transforms)
             filename = os.path.join(dataset_folder, dataset_name[:-7], transforms_to_name(early_transforms))
@@ -41,7 +47,7 @@ class BaseExperiment(LazyConfigurable):
 
     @lazyproperty
     def subsets(self):
-        keys_splitter = self["keys_splitter"]()
+        keys_splitter = self.cfg["keys_splitter"]
         return keys_splitter(self.dataset.keys, fold=self.get("fold", default=0))
 
     def progress(self, generator, **kwargs):
@@ -49,11 +55,10 @@ class BaseExperiment(LazyConfigurable):
 
     @property
     def batch_size(self):
-        return self["batch_size"]
+        return self.cfg["batch_size"]
 
     def batch_generator(self, keys, batch_size=None):
         batch_size = batch_size or self.batch_size
-        # TODO handle balanced batches
         self.batch_count += len(keys)//batch_size
         for keys, batch in self.dataset.batches(keys, batch_size, drop_incomplete=True):
             yield keys, {"batch_{}".format(k): v for k,v in batch.items()}
@@ -98,6 +103,7 @@ class BaseExperiment(LazyConfigurable):
     def predict(self, data):
         return self.batch_infer(data)
 
+
 class AsyncExperiment(BaseExperiment): # pylint: disable=abstract-method
     @lazyproperty
     def side_runner(self):
@@ -106,3 +112,12 @@ class AsyncExperiment(BaseExperiment): # pylint: disable=abstract-method
     def batch_generator(self, *args, **kwargs): # pylint: disable=signature-differs
         batch_generator = super().batch_generator(*args, **kwargs)
         return self.side_runner.yield_async(batch_generator)
+
+
+class DummyExperiment(BaseExperiment): # pylint: disable=abstract-method
+    def batch_generator(self, *args, **kwargs): # pylint: disable=signature-differs
+        self.cfg["dummy"] = True
+        gen = super().batch_generator(*args, **kwargs)
+        # yield only two batches per cycle
+        yield next(gen)
+        yield next(gen)

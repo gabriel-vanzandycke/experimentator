@@ -1,8 +1,7 @@
 import tensorflow as tf
 
 class ChunkProcessor():
-    # graph attribute should be set in the framework specific experiment
-    graph = None
+    pass
 
 class DoNothing(ChunkProcessor):
     def __call__(self, chunk):

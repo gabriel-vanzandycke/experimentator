@@ -18,7 +18,7 @@ class LoggedExperiment(BaseExperiment):
     @lazyproperty
     def logger(self):
         self.cfg["experiment_id"] = datetime()["dt"]
-        filename = self["logger_filename"].format(self.cfg["experiment_id"])
+        filename = self.cfg.get("logger_filename", f"{self.cfg['filename']}_{{}}.dcp").format(self.cfg["experiment_id"])
         logger = DataCollector(filename, external=["weights"])
         logger["cfg"] = self.cfg
         return logger
@@ -35,7 +35,7 @@ class LoggedExperiment(BaseExperiment):
         super().run_epoch(epoch)
 
         # Save weights
-        if self["save_weights"] == "all":
+        if self.get("save_weights", "none") == "all":
             self.logger["weights"] = self.weights
         self.logger["subset_names"] = list(self.subsets.keys())
         # Checkpoint logs
@@ -151,9 +151,23 @@ class NotebookExperiment(LoggedExperiment):  # pylint: disable=abstract-method
             display.display(self.illustrate())
             plt.close()
 
+class SaveWeights(Callback):
+    precedence = 100
+    min_loss = None
+    def __init__(self, exp):
+        self.exp = exp
+    def on_epoch_end(self, loss, epoch, **_):
+        if self.min_loss is None or loss < self.min_loss:
+            self.min_loss = loss
+            self.exp.save_weights(f"{self.exp.cfg['project_name']}/{self.exp.cfg['experiment_id']}/{epoch}_weights")
 
-
-
+class LogExperiment(Callback):
+    def __init__(self, exp):
+        project_name = exp.get("project_name", "unknown_project")
+        grid_sample = dict(exp.grid_sample) # copies the original dictionary
+        grid_sample.pop("fold", None)       # removes 'fold' to be able to group runs
+        run_name = json.dumps(grid_sample)
+        
 
 
 class LogState(Callback):

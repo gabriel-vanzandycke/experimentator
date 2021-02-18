@@ -1,34 +1,26 @@
-import random
 import numpy as np
 import tensorflow as tf
 from tensorflow.python.client import timeline # pylint: disable=no-name-in-module, unused-import
-
 from .base_experiment import BaseExperiment, lazyproperty
 
 if False: # pylint: disable=using-constant-test
     lazyproperty = property
 
-
 class TensorflowExperiment(BaseExperiment):
     run_options = None  # overwritten by callbacks
     run_metadata = None # overwritten by callbacks
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-
-        random_seed = int(self["manager_id"].replace("_","")[4:])
-        tf.random.set_seed(random_seed)
-        np.random.seed(random_seed)
-        random.seed(random_seed)
-
         tf.config.set_soft_device_placement(False)
         physical_devices = tf.config.list_physical_devices('GPU')
-        if physical_devices and self.get("GPU", None) is not None:
-            visible_devices = [physical_devices[int(i)] for i in self["GPU"]]
+        if physical_devices:
+            visible_devices = [physical_devices[self.get("GPU", 0)]]
             tf.config.set_visible_devices(visible_devices, device_type="GPU")
             for device in visible_devices:
                 tf.config.experimental.set_memory_growth(device, enable=True)
         tf.config.run_functions_eagerly(self.get("eager", False))
-        print(tf.config.get_visible_devices())
+        print([device.name for device in tf.config.get_visible_devices()])
 
     @lazyproperty
     def metrics(self):
@@ -40,7 +32,7 @@ class TensorflowExperiment(BaseExperiment):
 
     @lazyproperty
     def optimizer(self):
-        return self["optimizer"]()
+        return self.cfg["optimizer"]
 
     def load_weights(self, filename):
         self.train_model.load_weights(filename)
@@ -51,9 +43,7 @@ class TensorflowExperiment(BaseExperiment):
     @lazyproperty
     def inputs(self):
         data = self.dataset.query_item(next(iter(self.dataset.keys)))
-        inputs = {
-            "flag_rotate": tf.keras.Input(shape=(1), name="flag_rotate"),
-        }
+        inputs = {}
         skipped = []
         for tensor_name in data:
             if isinstance(data[tensor_name], (np.ndarray, np.int32, int, float)):
@@ -70,7 +60,7 @@ class TensorflowExperiment(BaseExperiment):
     @lazyproperty
     def chunk_processors(self):
         # cannot be a dict in case a ChunkProcessor is used twice
-        return [CP() for CP in self["chunk_processors"] if CP is not None]
+        return [CP for CP in self.cfg["chunk_processors"] if CP is not None]
 
     @lazyproperty
     def chunk(self):
@@ -92,7 +82,7 @@ class TensorflowExperiment(BaseExperiment):
     def infer_model(self):
         return tf.keras.Model(self.inputs, self.outputs)
 
-    @tf.function
+    #@tf.function
     def _batch_train(self, inputs):
         with tf.GradientTape() as tape:
             results = self.train_model(inputs, training=True)
@@ -100,23 +90,23 @@ class TensorflowExperiment(BaseExperiment):
         self.optimizer.apply_gradients(zip(grads, self.train_model.trainable_weights))
         return results
 
-    @tf.function
+    #@tf.function
     def _batch_eval(self, inputs):
         return self.eval_model(inputs, training=False)
 
-    @tf.function
+    #@tf.function
     def _batch_infer(self, inputs):
         return self.infer_model(inputs, training=False)
 
+    def select_data(self, data):
+        return {k:v for k,v in data.items() if k in self.inputs}
+
     def batch_train(self, data):
-        inputs = {k:v for k,v in {"flag_rotate": np.array([0]*self.batch_size), **data}.items() if k in self.inputs}
-        return self._batch_train(inputs)
+        return self._batch_train(self.select_data(data))
     def batch_eval(self, data):
-        inputs = {k:v for k,v in {"flag_rotate": np.array([0]*self.batch_size), **data}.items() if k in self.inputs}
-        return self._batch_eval(inputs)
+        return self._batch_eval(self.select_data(data))
     def batch_infer(self, data):
-        inputs = {k:v for k,v in {"flag_rotate": np.array([0]*self.batch_size), **data}.items() if k in self.inputs}
-        return self._batch_infer(inputs)
+        return self._batch_infer(self.select_data(data))
 
 
 

@@ -10,7 +10,7 @@ class CallbackedExperiment(BaseExperiment): # pylint: disable=abstract-method
 
     @lazyproperty
     def callbacks(self):
-        callbacks = [cb(exp=self) for cb in self["callbacks"] if cb is not None]
+        callbacks = [cb(exp=self) for cb in self.cfg["callbacks"] if cb is not None]
         return sorted(callbacks, key=lambda cb: cb.precedence)
 
     def fire(self, event):
@@ -87,4 +87,3 @@ class MeasureTime(Callback):
     def on_epoch_end(self, state, **_):
         toc_epoch = time.time()
         state["epoch_time"] = toc_epoch - self.tic_epoch
-

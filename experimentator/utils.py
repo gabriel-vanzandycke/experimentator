@@ -181,6 +181,12 @@ linestyles = {
     "testing": "-."
 }
 
+
+
+
+
+
+
 class DataCollector(dict):
     external = frozenset()
     def __init__(self, filename=None, readonly=False, external=None):
