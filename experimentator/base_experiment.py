@@ -119,5 +119,5 @@ class DummyExperiment(BaseExperiment): # pylint: disable=abstract-method
         self.cfg["dummy"] = True
         gen = super().batch_generator(*args, **kwargs)
         # yield only two batches per cycle
-        yield next(gen)
-        yield next(gen)
+        for _ in range(3):
+            yield next(gen)

@@ -15,7 +15,7 @@ class TensorflowExperiment(BaseExperiment):
         tf.config.set_soft_device_placement(False)
         physical_devices = tf.config.list_physical_devices('GPU')
         if physical_devices:
-            visible_devices = [physical_devices[self.get("GPU", 0)]]
+            visible_devices = [physical_devices[self.get("GPU", 0)]] # one single visible device for now
             tf.config.set_visible_devices(visible_devices, device_type="GPU")
             for device in visible_devices:
                 tf.config.experimental.set_memory_growth(device, enable=True)
@@ -29,6 +29,10 @@ class TensorflowExperiment(BaseExperiment):
     @lazyproperty
     def outputs(self):
         return {}
+
+    @lazyproperty
+    def device(self):
+        return tf.config.list_logical_devices()[-1]
 
     @lazyproperty
     def optimizer(self):
@@ -47,11 +51,12 @@ class TensorflowExperiment(BaseExperiment):
         skipped = []
         for tensor_name in data:
             if isinstance(data[tensor_name], (np.ndarray, np.int32, int, float)):
-                inputs["batch_{}".format(tensor_name)] = tf.keras.Input(
-                    dtype=tf.dtypes.as_dtype(data[tensor_name].dtype),
-                    shape=data[tensor_name].shape,
-                    name="batch_{}".format(tensor_name)
-                )
+                with tf.device(self.device):
+                    inputs["batch_{}".format(tensor_name)] = tf.keras.Input(
+                        dtype=tf.dtypes.as_dtype(data[tensor_name].dtype),
+                        shape=data[tensor_name].shape,
+                        name="batch_{}".format(tensor_name)
+                    )
             else:
                 skipped.append(tensor_name)
         if skipped:
@@ -60,15 +65,16 @@ class TensorflowExperiment(BaseExperiment):
 
     @lazyproperty
     def chunk_processors(self):
-        # cannot be a dict in case a ChunkProcessor is used twice
-        return [CP for CP in self.cfg["chunk_processors"] if CP is not None]
+        with tf.device(self.device):
+            return [CP for CP in self.cfg["chunk_processors"] if CP is not None] # cannot be a dict in case a ChunkProcessor is used twice
 
     @lazyproperty
     def chunk(self):
         chunk = self.inputs.copy() # copies the dictionary, but not its values (passed by reference) to be used again in the model definition
         for chunk_processor in self.chunk_processors:
             with tf.name_scope(chunk_processor.__class__.__name__):
-                chunk_processor(chunk)
+                with tf.device(self.device):
+                    chunk_processor(chunk)
         return chunk
 
     @lazyproperty
@@ -83,7 +89,7 @@ class TensorflowExperiment(BaseExperiment):
     def infer_model(self):
         return tf.keras.Model(self.inputs, self.outputs)
 
-    #@tf.function
+    @tf.function
     def _batch_train(self, inputs):
         with tf.GradientTape() as tape:
             results = self.train_model(inputs, training=True)
@@ -91,11 +97,11 @@ class TensorflowExperiment(BaseExperiment):
         self.optimizer.apply_gradients(zip(grads, self.train_model.trainable_weights))
         return results
 
-    #@tf.function
+    @tf.function
     def _batch_eval(self, inputs):
         return self.eval_model(inputs, training=False)
 
-    #@tf.function
+    @tf.function
     def _batch_infer(self, inputs):
         return self.infer_model(inputs, training=False)
 
@@ -103,10 +109,13 @@ class TensorflowExperiment(BaseExperiment):
         return {k:v for k,v in data.items() if k in self.inputs}
 
     def batch_train(self, data):
+        _ = self.train_model # forces lazyproperties to be created as attributes before wrapping with tf.function decorator
         return self._batch_train(self.select_data(data))
     def batch_eval(self, data):
+        _ = self.eval_model # forces lazyproperties to be created as attributes before wrapping with tf.function decorator
         return self._batch_eval(self.select_data(data))
     def batch_infer(self, data):
+        _ = self.infer_model # forces lazyproperties to be created as attributes before wrapping with tf.function decorator
         return self._batch_infer(self.select_data(data))
 
 
