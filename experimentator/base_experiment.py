@@ -1,9 +1,8 @@
-import os
-from tqdm import tqdm
+import logging
+from tqdm.auto import tqdm
 
-from mlworkflow import SideRunner, lazyproperty, TransformedDataset, PickledDataset, pickle_or_load
-from .utils import find, transforms_to_name, mkdir, RobustBatchesDataset
-
+from mlworkflow import SideRunner, lazyproperty, TransformedDataset, PickledDataset
+from .utils import find, RobustBatchesDataset, insert_suffix
 
 class BaseExperiment():
     batch_count = 0
@@ -19,6 +18,10 @@ class BaseExperiment():
     def get(self, key, default):
         return self.cfg.get(key, default)
 
+    @lazyproperty
+    def logger(self):
+        return logging.getLogger()
+
     @property
     def epochs(self):
         return 0 # can be overwritten in a LoggedExperiment to continue a loaded traning
@@ -31,17 +34,7 @@ class BaseExperiment():
     def dataset(self):
         dataset_name = self.cfg["dataset_name"]
         dataset = PickledDataset(find(dataset_name, verbose=False))
-        dataset_folder = os.environ["SSD_DATASETS_FOLDER"]
-
-        early_transforms = [t for t in self.get("early_transforms", [])]
-        late_transforms = [t for t in self.get("late_transforms", [])]
-        if early_transforms:
-            dataset = TransformedDataset(dataset, early_transforms)
-            filename = os.path.join(dataset_folder, dataset_name[:-7], transforms_to_name(early_transforms))
-            mkdir(os.path.dirname(filename))
-            dataset = pickle_or_load(dataset, filename)
-        if late_transforms:
-            dataset = TransformedDataset(dataset, late_transforms)
+        dataset = TransformedDataset(dataset, self.get("transforms", []))
         dataset = RobustBatchesDataset(dataset)
         return dataset
 
