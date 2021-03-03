@@ -10,7 +10,10 @@ class CallbackedExperiment(BaseExperiment): # pylint: disable=abstract-method
 
     @lazyproperty
     def callbacks(self):
-        callbacks = [cb(exp=self) for cb in self.cfg["callbacks"] if cb is not None]
+        callbacks = [cb for cb in self.cfg["callbacks"] if cb is not None]
+        for cb in callbacks:
+            if getattr(cb, "init", None):
+                cb.init(exp=self)
         return sorted(callbacks, key=lambda cb: cb.precedence)
 
     def fire(self, event):
@@ -47,8 +50,6 @@ class CallbackedExperiment(BaseExperiment): # pylint: disable=abstract-method
 
 class Callback():
     precedence = 10
-    def __init__(self, *args, **kwargs):
-        pass # required to call constructor with 'exp'
     def fire(self, event, state):
         cb = getattr(self, "on_{}".format(event), None)
         if cb:

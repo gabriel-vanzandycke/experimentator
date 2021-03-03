@@ -154,7 +154,7 @@ class NotebookExperiment(LoggedExperiment):  # pylint: disable=abstract-method
 class SaveWeights(Callback):
     precedence = 100
     min_loss = None
-    def __init__(self, exp):
+    def init(self, exp):
         self.exp = exp
     def on_epoch_end(self, loss, epoch, **_):
         if self.min_loss is None or loss < self.min_loss:
@@ -162,7 +162,7 @@ class SaveWeights(Callback):
             self.exp.save_weights(f"{self.exp.cfg['project_name']}/{self.exp.cfg['experiment_id']}/{epoch}_weights")
 
 class LogExperiment(Callback):
-    def __init__(self, exp):
+    def init(self, exp):
         project_name = exp.get("project_name", "unknown_project")
         grid_sample = dict(exp.grid_sample) # copies the original dictionary
         grid_sample.pop("fold", None)       # removes 'fold' to be able to group runs
@@ -173,7 +173,7 @@ class LogExperiment(Callback):
 class LogState(Callback):
     precedence = 100 # very last
     subsets = set()
-    def __init__(self, exp):
+    def init(self, exp):
         # project_name = exp.get("project_name", "unknown_project")
         # grid_sample = dict(exp.grid_sample) # copies the original dictionary
         # grid_sample.pop("fold", None)       # removes 'fold' to be able to group runs

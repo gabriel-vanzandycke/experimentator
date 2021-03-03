@@ -5,7 +5,7 @@ from .callbacked_experiment import Callback
 
 class LogStateWandB(Callback):
     precedence = 100 # very last
-    def __init__(self, exp): # pylint: disable=super-init-not-called
+    def init(self, exp): # pylint: disable=super-init-not-called
         os.environ["WANDB_SILENT"] = "true"
         project_name = exp.get("project_name", "unknown_project")
         grid_sample = dict(exp.grid_sample) # copies the original dictionary
