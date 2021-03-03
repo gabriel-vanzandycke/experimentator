@@ -2,9 +2,8 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.python.client import timeline # pylint: disable=no-name-in-module, unused-import
 from .base_experiment import BaseExperiment, lazyproperty
+from .callbacked_experiment import Callback
 
-if False: # pylint: disable=using-constant-test
-    lazyproperty = property
 
 class TensorflowExperiment(BaseExperiment):
     run_options = None  # overwritten by callbacks
@@ -14,13 +13,16 @@ class TensorflowExperiment(BaseExperiment):
         super().__init__(*args, **kwargs)
         tf.config.set_soft_device_placement(False)
         physical_devices = tf.config.list_physical_devices('GPU')
+        self.logger.warning(physical_devices)
         if physical_devices:
-            visible_devices = [physical_devices[self.get("GPU", 0)]] # one single visible device for now
+            device_index = self.get("worker_id", self.get("GPU", 0))
+            self.logger.warning(device_index)
+            visible_devices = [physical_devices[device_index]] # one single visible device for now
             tf.config.set_visible_devices(visible_devices, device_type="GPU")
             for device in visible_devices:
                 tf.config.experimental.set_memory_growth(device, enable=True)
         tf.config.run_functions_eagerly(self.get("eager", False))
-        print([device.name for device in tf.config.get_visible_devices()])
+        self.logger.debug(str(self.device) + str([device.name for device in tf.config.get_visible_devices()]))
 
     @lazyproperty
     def metrics(self):
@@ -32,7 +34,7 @@ class TensorflowExperiment(BaseExperiment):
 
     @lazyproperty
     def device(self):
-        return tf.config.list_logical_devices()[-1]
+        return tf.config.list_logical_devices()[-1].name
 
     @lazyproperty
     def optimizer(self):
@@ -60,7 +62,7 @@ class TensorflowExperiment(BaseExperiment):
             else:
                 skipped.append(tensor_name)
         if skipped:
-            print("Skipped inputs: " + ", ".join(["{}({})".format(name, data[name]) for name in skipped]))
+            self.logger.debug("Skipped inputs: " + ", ".join(["{}({})".format(name, data[name]) for name in skipped]))
         return inputs
 
     @lazyproperty
@@ -70,7 +72,7 @@ class TensorflowExperiment(BaseExperiment):
 
     @lazyproperty
     def chunk(self):
-        chunk = self.inputs.copy() # copies the dictionary, but not its values (passed by reference) to be used again in the model definition
+        chunk = self.inputs.copy() # copies the dictionary, but not its values (passed by reference) to be used again in the model instanciation
         for chunk_processor in self.chunk_processors:
             with tf.name_scope(chunk_processor.__class__.__name__):
                 with tf.device(self.device):
@@ -79,22 +81,26 @@ class TensorflowExperiment(BaseExperiment):
 
     @lazyproperty
     def train_model(self):
-        return tf.keras.Model(self.inputs, {"loss": self.chunk["loss"], **self.metrics})
+        with tf.device(self.device):
+            return tf.keras.Model(self.inputs, {"loss": self.chunk["loss"], **self.metrics})
 
     @lazyproperty
     def eval_model(self):
-        return tf.keras.Model(self.inputs, {"loss": self.chunk["loss"], **self.metrics, **self.outputs})
+        with tf.device(self.device):
+            return tf.keras.Model(self.inputs, {"loss": self.chunk["loss"], **self.metrics, **self.outputs})
 
     @lazyproperty
     def infer_model(self):
-        return tf.keras.Model(self.inputs, self.outputs)
+        with tf.device(self.device):
+            return tf.keras.Model(self.inputs, self.outputs)
 
     @tf.function
     def _batch_train(self, inputs):
-        with tf.GradientTape() as tape:
-            results = self.train_model(inputs, training=True)
-        grads = tape.gradient(results["loss"], self.train_model.trainable_weights)
-        self.optimizer.apply_gradients(zip(grads, self.train_model.trainable_weights))
+        with tf.device(self.device):
+            with tf.GradientTape() as tape:
+                results = self.train_model(inputs, training=True)
+            grads = tape.gradient(results["loss"], self.train_model.trainable_weights)
+            self.optimizer.apply_gradients(zip(grads, self.train_model.trainable_weights))
         return results
 
     @tf.function
@@ -120,6 +126,23 @@ class TensorflowExperiment(BaseExperiment):
 
 
 
+class ProfileCallback(Callback):
+    # def __init__(self, exp):
+    #     self.writer = tf.summary.create_file_writer("logdir")
+    #     tf.debugging.experimental.enable_dump_debug_info("logdir", tensor_debug_mode="FULL_HEALTH", circular_buffer_size=-1)
+    def on_epoch_begin(self, epoch, **_):
+        return
+        if epoch == 2:
+            tf.profiler.experimental.start("logdir")
+        if epoch == 4:
+            tf.profiler.experimental.stop()
+    # def on_batch_begin(self, epoch, **_):
+    #     if 2 <= epoch < 4:
+    #         tf.summary.trace_on(graph=True, profiler=True)
+    # def on_batch_end(self, epoch, batch, **_):
+    #     if 2 <= epoch < 4:
+    #         with self.writer.as_default():
+    #             tf.summary.trace_export(name="on_batch_end_{}.{}".format(epoch, batch), step=0, profiler_outdir="logdir")
 #     def freeze(self, filename, output_nodes_names=None):
 #         """Freezes the state of a session into a pruned computation graph.
 #         Creates a new computation graph where variable nodes are replaced by

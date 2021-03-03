@@ -11,6 +11,11 @@ from mlworkflow import get_callable, Dataset
 from mlworkflow.datasets import batchify
 
 
+
+def insert_suffix(filename, suffix):
+    root, ext = os.path.splitext(filename)
+    return root + suffix + ext
+
 class OutputInhibitor():
     def __init__(self, name=None):
         self.name = name

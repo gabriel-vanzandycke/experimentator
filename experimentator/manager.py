@@ -3,6 +3,7 @@ import ast
 import datetime
 from enum import Enum
 import itertools
+import logging
 import os
 import time
 import threading
@@ -11,12 +12,13 @@ import astunparse
 from mlworkflow import SideRunner, lazyproperty
 from .utils import find
 
+# pylint: disable=logging-fstring-interpolation
+
 def product_kwargs(**kwargs):
     try:
         kvs = [[(k, v) for v in kwargs[k]] for k in kwargs]
-    except:
-        print(f"Error parsing: {kwargs}")
-        raise
+    except BaseException as e:
+        raise SyntaxError(f"Error parsing: {kwargs}") from e
     yield from [dict(kv) for kv in itertools.product(*kvs)]
 
 def update_ast(tree, overwrite):
@@ -36,11 +38,7 @@ def update_ast(tree, overwrite):
     for key, value in overwrite.items():
         tree.body.append(ast.Assign([ast.Name(id=key, ctx=ast.Store())], ast.Constant(value, kind=None)))
     ast.fix_missing_locations(tree)
-    return tree
-
-def insert_suffix(filename, suffix):
-    root, ext = os.path.splitext(filename)
-    return root + suffix + ext
+    return overwrite
 
 class JobStatus(Enum):
     TODO = 0
@@ -59,31 +57,48 @@ class Job():
     def config(self):
         config = {}
         exec(self.config_str, None, config) # pylint: disable=exec-used
-        return {**config, "grid_sample": self.grid_sample, "filename": self.filename}# "config_str": self.config_str, 
+        return {**config, "grid_sample": self.grid_sample, "filename": self.filename}
 
     @lazyproperty
     def exp(self):
-        #os.sys.path.insert(0, os.getcwd())
         return type("Exp", tuple(self.config["experiment_type"][::-1]), {})(self.config)
 
+    @staticmethod
+    def _get_worker_id(worker_ids):
+        if not worker_ids:
+            return None
+        worker_id = worker_ids[threading.get_ident()]
+        threading.current_thread().name = str(worker_id)
+        return worker_id
+
     def run(self, **kwargs):
+        project_name = os.path.splitext(os.path.basename(self.filename))[0]
+        experiment_id = datetime.datetime.now().strftime("%Y%m%d_%H%M%S.%f")
+        worker_id = self._get_worker_id(kwargs.pop("worker_ids", None))
+        self.config.update(project_name=project_name, experiment_id=experiment_id, worker_id=worker_id, **kwargs)
         try:
             self.status = JobStatus.BUSY
-            self.config.update(
-                experiment_id=datetime.datetime.now().strftime("%Y%m%d_%H%M%S.%f"),
-                project_name=os.path.splitext(os.path.basename(self.filename))[0],
-                worker_id=kwargs["worker_ids"][threading.get_ident()],
-                **kwargs)
+            self.exp.logger.info(f"{project_name}[{experiment_id}] doing {self.grid_sample}")
             self.exp.train(epochs=kwargs["epochs"])
-        except:
+        except BaseException as e:
             self.status = JobStatus.FAIL
-            raise
+            self.exp.logger.exception(f"{project_name}.{experiment_id} failed")
+            if isinstance(e, KeyboardInterrupt):
+                raise e
         else:
             self.status = JobStatus.DONE
+            self.exp.logger.info(f"{project_name}.{experiment_id} done")
 
 class ExperimentManager():
-    def __init__(self, filename, num_workers=0, **grid_search):
-        print("config: {}\tgrid_search: {}".format(filename, grid_search), flush=True)
+    def __init__(self, filename, logfile=None, num_workers=0, **grid_search):
+        self.logger = logging.getLogger("experimentator")
+        if logfile:
+            handler = logging.FileHandler(logfile, mode="w")
+            handler.setFormatter(logging.Formatter("[worker#%(threadName)s] %(asctime)s [%(levelname)s]%(filename)s:%(lineno)d: %(message)s"))
+            handler.setLevel(logging.INFO if num_workers > 0 else logging.DEBUG)
+            self.logger.addHandler(handler)
+        self.logger.setLevel(logging.INFO if num_workers > 0 else logging.DEBUG)
+        threading.current_thread().name = "main"
         self.side_runner = SideRunner(thread_count=num_workers) if num_workers > 0 else None
 
         with open(find(filename)) as f:
@@ -93,8 +108,10 @@ class ExperimentManager():
                 self.jobs = []
                 tree = ast.parse(f.read())
                 for grid_sample in product_kwargs(**grid_search):
-                    update_ast(tree, dict(grid_sample)) # dict makes a copy
+                    unoverwritten = update_ast(tree, dict(grid_sample)) # dict makes a copy
                     self.jobs.append(Job(filename, config_str=astunparse.unparse(tree), grid_sample=grid_sample))
+                if unoverwritten:
+                    self.logger.warning("Un-overwritten kwargs: {}".format(unoverwritten))
 
     @lazyproperty
     def worker_ids(self):
@@ -105,19 +122,23 @@ class ExperimentManager():
             return dict({f(0)})
         return dict(self.side_runner.pool.map(f, range(self.side_runner.thread_count), 1))
 
-    def execute(self, epochs, **kwargs):
-        print("overridden config: {}".format(kwargs))
+    def execute(self, epochs, **runtime_cfg):
+        self.logger.info(f"Runtime config: {runtime_cfg}")
         for job in self.jobs:
             if job.status == JobStatus.TODO:
-                print("Doing {}".format(job.grid_sample), flush=True)
-                kwargs.update(worker_ids=self.worker_ids)
-                self.side_runner.do(Job.run, job, epochs=epochs, **kwargs) if self.side_runner else job.run(epochs=epochs, **kwargs) # pylint: disable=expression-not-assigned
+                if self.side_runner:
+                    self.side_runner.run_async(Job.run, job, epochs=epochs, worker_ids=self.worker_ids, **runtime_cfg)
+                else:
+                    job.run(epochs=epochs, **runtime_cfg) # pylint: disable=expression-not-assigned
+        if self.side_runner:
+            self.side_runner.collect_runs()
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("filename")
     parser.add_argument("--epochs", type=int)
     parser.add_argument('--workers', type=int, default=0)
+    parser.add_argument('--logfile', type=str, default=None)# type=argparse.FileType('w', encoding='UTF-8')
     parser.add_argument('--grid', nargs="*")
     parser.add_argument('--kwargs', nargs="*")
     args = parser.parse_args()
@@ -130,7 +151,7 @@ def main():
     for arg in args.kwargs or []:
         exec(arg, None, kwargs) # pylint: disable=exec-used
 
-    manager = ExperimentManager(args.filename, num_workers=args.workers, **grid)
+    manager = ExperimentManager(args.filename, num_workers=args.workers, logfile=args.logfile, **grid)
 
     manager.execute(args.epochs, **kwargs)
 
