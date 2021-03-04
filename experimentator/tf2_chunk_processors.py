@@ -28,7 +28,7 @@ class Sigmoid(ChunkProcessor):
 
 class SigmoidCrossEntropyLoss(ChunkProcessor):
     def __call__(self, chunk):
-        chunk["loss"] = tf.keras.losses.binary_crossentropy(chunk["batch_target"][...,tf.newaxis], chunk["batch_logits"], True)
+        chunk["loss"] = tf.reduce_mean(tf.keras.losses.binary_crossentropy(chunk["batch_target"][...,tf.newaxis], chunk["batch_logits"], True))
 
 class SigmoidCrossEntropyLossMap(ChunkProcessor):
     def __call__(self, chunk):
@@ -77,13 +77,14 @@ class Heatmap(ChunkProcessor):
         self.tensor_name = tensor_name
     def __call__(self, chunk):
         chunk["batch_heatmap"] = chunk[self.tensor_name][:,:,:,self.class_index]
+
 class SoftmaxCrossEntropyLoss(ChunkProcessor):
     def __call__(self, chunk):
-        chunk["loss"] = tf.losses.softmax_cross_entropy(chunk["batch_target"], chunk["batch_logits"], reduction=tf.losses.Reduction.SUM)
+        chunk["loss"] = tf.nn.softmax_cross_entropy_with_logits(chunk["batch_target"], chunk["batch_logits"])
 
 class Softmax(ChunkProcessor):
     def __call__(self, chunk):
-        assert chunk["batch_logits"].shape[-1] > 1, "It doesn't mean anything to take the softmax of a signle output feature map"
+        assert chunk["batch_logits"].shape[-1] > 1, "It doesn't mean anything to take the softmax of a single output feature map"
         chunk["batch_softmax"] = tf.nn.softmax(chunk["batch_logits"])
 
 class OneHot(ChunkProcessor):
@@ -121,14 +122,6 @@ class ReduceLossMap(ChunkProcessor):
 class KerasHack(ChunkProcessor):
     def __call__(self, chunk):
         chunk["batch_logits"] = tf.subtract(chunk["batch_logits"], tf.expand_dims(tf.reduce_max(chunk["batch_logits"], axis=-1), -1))
-
-class GlobalMaxPoolingLogits(ChunkProcessor):
-    def __call__(self, chunk):
-        chunk["batch_logits"] = tf.reduce_max(chunk["batch_logits"], axis=[1,2])
-
-class GlobalAvgPoolingLogits(ChunkProcessor):
-    def __call__(self, chunk):
-        chunk["batch_logits"] = tf.reduce_mean(chunk["batch_logits"], axis=[1,2])
 
 class MeanSquareErrorLoss(ChunkProcessor):
     def __call__(self, chunk):

@@ -13,10 +13,10 @@ class TensorflowExperiment(BaseExperiment):
         super().__init__(*args, **kwargs)
         tf.config.set_soft_device_placement(False)
         physical_devices = tf.config.list_physical_devices('GPU')
-        self.logger.warning(physical_devices)
         if physical_devices:
             device_index = self.get("worker_id", self.get("GPU", 0))
-            self.logger.warning(device_index)
+            if device_index is None:
+                device_index = 0
             visible_devices = [physical_devices[device_index]] # one single visible device for now
             tf.config.set_visible_devices(visible_devices, device_type="GPU")
             for device in visible_devices:

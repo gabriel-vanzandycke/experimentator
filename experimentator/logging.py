@@ -1,18 +1,19 @@
 import io
 import logging
-from base_experiment import BaseExperiment
 from mlworkflow import lazyproperty
+from .base_experiment import BaseExperiment
+from .utils import insert_suffix
 
 class TqdmToLogger(io.StringIO):
-    buf = ''
+    buffer = ''
     def __init__(self, logger, level=logging.DEBUG):
         super().__init__()
         self.logger = logger
         self.level = level
-    def write(self,buf):
-        self.buf = buf.strip('\r\n\t ')
+    def write(self, buffer):
+        self.buffer = buffer.strip('\r\n\t ')
     def flush(self):
-        self.logger.log(self.level, self.buf)
+        self.logger.log(self.level, self.buffer)
 
 class LoggingExperiment(BaseExperiment):
     @lazyproperty
@@ -29,7 +30,7 @@ class LoggingExperiment(BaseExperiment):
             handler.setFormatter(logging.Formatter("[%(levelname)s]%(filename)s:%(lineno)d: %(message)s"))
             logging.info("Logging in %s", name)
         return logger
-    
-    def progress(self, generator, **kwargs)
+
+    def progress(self, generator, **kwargs):
         stream = TqdmToLogger(self.logger, level=logging.DEBUG)
         return super().progress(generator, file=stream, **kwargs)

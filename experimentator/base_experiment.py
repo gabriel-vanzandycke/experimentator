@@ -2,7 +2,7 @@ import logging
 from tqdm.auto import tqdm
 
 from mlworkflow import SideRunner, lazyproperty, TransformedDataset, PickledDataset
-from .utils import find, RobustBatchesDataset, insert_suffix
+from .utils import find, RobustBatchesDataset
 
 class BaseExperiment():
     batch_count = 0
