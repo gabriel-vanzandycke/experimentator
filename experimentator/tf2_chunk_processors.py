@@ -80,7 +80,7 @@ class Heatmap(ChunkProcessor):
 
 class SoftmaxCrossEntropyLoss(ChunkProcessor):
     def __call__(self, chunk):
-        chunk["loss"] = tf.nn.softmax_cross_entropy_with_logits(chunk["batch_target"], chunk["batch_logits"])
+        chunk["loss"] = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(chunk["batch_target"], chunk["batch_logits"]))
 
 class Softmax(ChunkProcessor):
     def __call__(self, chunk):
