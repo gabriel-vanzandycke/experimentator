@@ -10,7 +10,7 @@ import threading
 
 import astunparse
 from mlworkflow import SideRunner, lazyproperty
-from .utils import find
+from .utils import find, mkdir
 
 # pylint: disable=logging-fstring-interpolation
 
@@ -76,6 +76,14 @@ class Job():
         experiment_id = datetime.datetime.now().strftime("%Y%m%d_%H%M%S.%f")
         worker_id = self._get_worker_id(kwargs.pop("worker_ids", None))
         self.config.update(project_name=project_name, experiment_id=experiment_id, worker_id=worker_id, **kwargs)
+
+        # write config string to file
+        filename = os.path.join(project_name, experiment_id, f"{project_name}_{experiment_id}.py")
+        mkdir(os.path.dirname(filename))
+        with open(filename, "w") as f:
+            f.write(self.config_str)
+
+        # Launch training
         try:
             self.status = JobStatus.BUSY
             self.exp.logger.info(f"{project_name}[{experiment_id}] doing {self.grid_sample}")

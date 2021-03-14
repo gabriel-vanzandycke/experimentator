@@ -28,7 +28,7 @@ class Sigmoid(ChunkProcessor):
 
 class SigmoidCrossEntropyLoss(ChunkProcessor):
     def __call__(self, chunk):
-        chunk["loss"] = tf.reduce_mean(tf.keras.losses.binary_crossentropy(chunk["batch_target"][...,tf.newaxis], chunk["batch_logits"], True))
+        chunk["loss"] = tf.reduce_mean(tf.keras.losses.binary_crossentropy(chunk["batch_target"][...,tf.newaxis], chunk["batch_logits"], True), axis=[1,2])
 
 class SigmoidCrossEntropyLossMap(ChunkProcessor):
     def __call__(self, chunk):

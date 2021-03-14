@@ -23,6 +23,14 @@ class BaseExperiment():
         return logging.getLogger()
 
     @property
+    def project_name(self):
+        return self.get('project_name', 'unknown_project')
+    
+    @property
+    def experiment_id(self):
+        return self.get('experiment_id', 0)
+
+    @property
     def epochs(self):
         return 0 # can be overwritten in a LoggedExperiment to continue a loaded traning
 

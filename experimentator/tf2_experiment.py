@@ -46,9 +46,19 @@ class TensorflowExperiment(BaseExperiment):
     def save_weights(self, filename):
         self.train_model.save_weights(filename)
 
+    # @lazyproperty
+    # def checkpoint(self):
+    #     tf.train.Checkpoint(step=tf.Variable(1), optimizer=self.optimizer, net=self.train_model, iterator=iter(self.batch_generator))
+
+    # @lazyproperty
+    # def manager(self):
+    #     checkpoint_dir = os.path.join()
+    #     tf.train.CheckpointManager(self.checkpoint, )
+
     @lazyproperty
     def inputs(self):
-        data = self.dataset.query_item(next(iter(self.dataset.keys)))
+        # extract first dataset item which is not None to compute placeholders dimensions and types
+        data = next(self.dataset.query_item(k) for k in iter(self.dataset.keys) if self.dataset.query_item(k))
         inputs = {}
         skipped = []
         for tensor_name in data:

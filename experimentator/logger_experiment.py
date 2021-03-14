@@ -159,11 +159,11 @@ class SaveWeights(Callback):
     def on_epoch_end(self, loss, epoch, **_):
         if self.min_loss is None or loss < self.min_loss:
             self.min_loss = loss
-            self.exp.save_weights(f"{self.exp.get('project_name', 'unknown_project')}/{self.exp.get('experiment_id',0)}/{epoch}_weights")
+            self.exp.save_weights(f"{self.exp.project_name}/{self.exp.experiment_id}/{epoch}_weights")
 
 class LogExperiment(Callback):
     def init(self, exp):
-        project_name = exp.get("project_name", "unknown_project")
+        project_name = exp.project_name
         grid_sample = dict(exp.grid_sample) # copies the original dictionary
         grid_sample.pop("fold", None)       # removes 'fold' to be able to group runs
         run_name = json.dumps(grid_sample)
@@ -174,7 +174,7 @@ class LogState(Callback):
     precedence = 100 # very last
     subsets = set()
     def init(self, exp):
-        # project_name = exp.get("project_name", "unknown_project")
+        # project_name = exp.project_name
         # grid_sample = dict(exp.grid_sample) # copies the original dictionary
         # grid_sample.pop("fold", None)       # removes 'fold' to be able to group runs
         # run_name = json.dumps(grid_sample)
