@@ -1,5 +1,6 @@
 import argparse
 import ast
+import copy
 import datetime
 from enum import Enum
 import itertools
@@ -47,11 +48,15 @@ class JobStatus(Enum):
     DONE = 3
 
 class Job():
-    def __init__(self, filename, config_str, grid_sample=None):
+    def __init__(self, filename, config_tree, grid_sample=None):
         self.filename = filename
-        self.config_str = config_str
+        self.config_tree = config_tree
         self.grid_sample = grid_sample or {}
         self.status = JobStatus.TODO
+
+    @lazyproperty
+    def config_str(self):
+        return astunparse.unparse(self.config_tree)
 
     @lazyproperty
     def config(self):
@@ -71,13 +76,18 @@ class Job():
         threading.current_thread().name = str(worker_id)
         return worker_id
 
-    def run(self, **kwargs):
+    def run(self, epochs, **runtime_cfg):
         project_name = os.path.splitext(os.path.basename(self.filename))[0]
         experiment_id = datetime.datetime.now().strftime("%Y%m%d_%H%M%S.%f")
-        worker_id = self._get_worker_id(kwargs.pop("worker_ids", None))
-        self.config.update(project_name=project_name, experiment_id=experiment_id, worker_id=worker_id, **kwargs)
+        worker_id = self._get_worker_id(runtime_cfg.pop("worker_ids", None))
 
-        # write config string to file
+        # Update config tree with runtime config
+        update_ast(self.config_tree, dict(runtime_cfg)) # dict makes a copy
+
+        # Add run and project names
+        self.config.update(project_name=project_name, experiment_id=experiment_id, worker_id=worker_id)
+
+        # Write config string to file
         filename = os.path.join(project_name, experiment_id, f"{project_name}_{experiment_id}.py")
         mkdir(os.path.dirname(filename))
         with open(filename, "w") as f:
@@ -87,7 +97,7 @@ class Job():
         try:
             self.status = JobStatus.BUSY
             self.exp.logger.info(f"{project_name}[{experiment_id}] doing {self.grid_sample}")
-            self.exp.train(epochs=kwargs["epochs"])
+            self.exp.train(epochs=epochs)
         except BaseException as e:
             self.status = JobStatus.FAIL
             self.exp.logger.exception(f"{project_name}.{experiment_id} failed")
@@ -116,8 +126,8 @@ class ExperimentManager():
                 self.jobs = []
                 tree = ast.parse(f.read())
                 for grid_sample in product_kwargs(**grid_search):
-                    unoverwritten = update_ast(tree, dict(grid_sample)) # dict makes a copy
-                    self.jobs.append(Job(filename, config_str=astunparse.unparse(tree), grid_sample=grid_sample))
+                    unoverwritten = update_ast(copy.deepcopy(tree), dict(grid_sample)) # dict makes a copy
+                    self.jobs.append(Job(filename, config_tree=tree, grid_sample=grid_sample))
                 if unoverwritten:
                     self.logger.warning("Un-overwritten kwargs: {}".format(unoverwritten))
 
@@ -142,13 +152,13 @@ class ExperimentManager():
             self.side_runner.collect_runs()
 
 def main():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description="Experimentation library", prog="experimentator")
     parser.add_argument("filename")
     parser.add_argument("--epochs", type=int)
     parser.add_argument('--workers', type=int, default=0)
     parser.add_argument('--logfile', type=str, default=None)# type=argparse.FileType('w', encoding='UTF-8')
     parser.add_argument('--grid', nargs="*")
-    parser.add_argument('--kwargs', nargs="*")
+    parser.add_argument('--kwargs', nargs="*", action='append')
     args = parser.parse_args()
 
     grid = {}
@@ -156,11 +166,10 @@ def main():
         exec(arg, None, grid) # pylint: disable=exec-used
 
     kwargs = {}
-    for arg in args.kwargs or []:
-        exec(arg, None, kwargs) # pylint: disable=exec-used
+    for kwarg in [kwarg for kwargs in args.kwargs or [[]] for kwarg in kwargs]: # Flattened appended kwargs
+        exec(kwarg, None, kwargs) # pylint: disable=exec-used
 
     manager = ExperimentManager(args.filename, num_workers=args.workers, logfile=args.logfile, **grid)
-
     manager.execute(args.epochs, **kwargs)
 
 

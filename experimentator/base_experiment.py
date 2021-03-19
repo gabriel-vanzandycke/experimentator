@@ -25,7 +25,7 @@ class BaseExperiment():
     @property
     def project_name(self):
         return self.get('project_name', 'unknown_project')
-    
+
     @property
     def experiment_id(self):
         return self.get('experiment_id', 0)

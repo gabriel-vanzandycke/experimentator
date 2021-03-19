@@ -44,6 +44,7 @@ class TensorflowExperiment(BaseExperiment):
         self.train_model.load_weights(filename)
 
     def save_weights(self, filename):
+        print("pad with 0s")
         self.train_model.save_weights(filename)
 
     # @lazyproperty
