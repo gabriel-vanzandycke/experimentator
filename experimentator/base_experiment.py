@@ -31,6 +31,10 @@ class BaseExperiment():
         return self.get('experiment_id', 0)
 
     @property
+    def folder(self):
+        return self.get('folder', 'default_folder')
+
+    @property
     def epochs(self):
         return 0 # can be overwritten in a LoggedExperiment to continue a loaded traning
 

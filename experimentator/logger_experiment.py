@@ -159,7 +159,7 @@ class SaveWeights(Callback):
     def on_epoch_end(self, loss, epoch, **_):
         if self.min_loss is None or loss < self.min_loss:
             self.min_loss = loss
-            self.exp.save_weights(f"{self.exp.project_name}/{self.exp.experiment_id}/{epoch:03d}_weights")
+            self.exp.save_weights(f"{self.exp.folder}/{epoch:04d}_weights")
 
 class LogExperiment(Callback):
     def init(self, exp):

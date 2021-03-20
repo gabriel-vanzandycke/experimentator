@@ -54,7 +54,7 @@ class Job():
         self.grid_sample = grid_sample or {}
         self.status = JobStatus.TODO
 
-    @lazyproperty
+    @property
     def config_str(self):
         return astunparse.unparse(self.config_tree)
 
@@ -76,7 +76,7 @@ class Job():
         threading.current_thread().name = str(worker_id)
         return worker_id
 
-    def run(self, epochs, **runtime_cfg):
+    def run(self, epochs, keep=True, **runtime_cfg):
         project_name = os.path.splitext(os.path.basename(self.filename))[0]
         experiment_id = datetime.datetime.now().strftime("%Y%m%d_%H%M%S.%f")
         worker_id = self._get_worker_id(runtime_cfg.pop("worker_ids", None))
@@ -84,14 +84,15 @@ class Job():
         # Update config tree with runtime config
         update_ast(self.config_tree, dict(runtime_cfg)) # dict makes a copy
 
-        # Add run and project names
-        self.config.update(project_name=project_name, experiment_id=experiment_id, worker_id=worker_id)
-
         # Write config string to file
-        filename = os.path.join(project_name, experiment_id, f"{project_name}_{experiment_id}.py")
-        mkdir(os.path.dirname(filename))
+        folder = os.path.join(project_name, experiment_id)
+        mkdir(folder)
+        filename = os.path.join(folder, f"{project_name}_{experiment_id}.py")
         with open(filename, "w") as f:
             f.write(self.config_str)
+
+        # Add run and project names
+        self.config.update(project_name=project_name, experiment_id=experiment_id, worker_id=worker_id, folder=folder)
 
         # Launch training
         try:
@@ -106,6 +107,9 @@ class Job():
         else:
             self.status = JobStatus.DONE
             self.exp.logger.info(f"{project_name}.{experiment_id} done")
+
+        if not keep:
+            del self.exp
 
 class ExperimentManager():
     def __init__(self, filename, logfile=None, num_workers=0, **grid_search):
@@ -126,7 +130,8 @@ class ExperimentManager():
                 self.jobs = []
                 tree = ast.parse(f.read())
                 for grid_sample in product_kwargs(**grid_search):
-                    unoverwritten = update_ast(copy.deepcopy(tree), dict(grid_sample)) # dict makes a copy
+                    tree = copy.deepcopy(tree)
+                    unoverwritten = update_ast(tree, dict(grid_sample)) # dict makes a copy
                     self.jobs.append(Job(filename, config_tree=tree, grid_sample=grid_sample))
                 if unoverwritten:
                     self.logger.warning("Un-overwritten kwargs: {}".format(unoverwritten))
@@ -145,9 +150,9 @@ class ExperimentManager():
         for job in self.jobs:
             if job.status == JobStatus.TODO:
                 if self.side_runner:
-                    self.side_runner.run_async(Job.run, job, epochs=epochs, worker_ids=self.worker_ids, **runtime_cfg)
+                    self.side_runner.run_async(Job.run, job, epochs=epochs, keep=False, worker_ids=self.worker_ids, **runtime_cfg)
                 else:
-                    job.run(epochs=epochs, **runtime_cfg) # pylint: disable=expression-not-assigned
+                    job.run(epochs=epochs, keep=False, **runtime_cfg) # pylint: disable=expression-not-assigned
         if self.side_runner:
             self.side_runner.collect_runs()
 
