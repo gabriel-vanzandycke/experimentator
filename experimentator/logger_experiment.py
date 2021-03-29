@@ -154,19 +154,23 @@ class NotebookExperiment(LoggedExperiment):  # pylint: disable=abstract-method
 class SaveWeights(Callback):
     precedence = 100
     min_loss = None
+    def __init__(self, strategy="best"):
+        self.strategy = strategy
     def init(self, exp):
         self.exp = exp
     def on_epoch_end(self, loss, epoch, **_):
-        if self.min_loss is None or loss < self.min_loss:
+        if     (self.strategy == "best" and (self.min_loss is None or loss < self.min_loss)) \
+            or (self.strategy == "all"):
             self.min_loss = loss
             self.exp.save_weights(f"{self.exp.folder}/{epoch:04d}_weights")
+        
 
-class LogExperiment(Callback):
-    def init(self, exp):
-        project_name = exp.project_name
-        grid_sample = dict(exp.grid_sample) # copies the original dictionary
-        grid_sample.pop("fold", None)       # removes 'fold' to be able to group runs
-        run_name = json.dumps(grid_sample)
+# class LogExperiment(Callback):
+#     def init(self, exp):
+#         project_name = exp.project_name
+#         grid_sample = dict(exp.grid_sample) # copies the original dictionary
+#         grid_sample.pop("fold", None)       # removes 'fold' to be able to group runs
+#         run_name = json.dumps(grid_sample)
         
 
 
