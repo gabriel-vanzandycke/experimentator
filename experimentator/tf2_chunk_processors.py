@@ -44,6 +44,21 @@ class GlobalAvgPoolingLogits(ChunkProcessor):
         chunk["batch_logits"] = tf.reduce_mean(chunk["batch_logits"], axis=[1,2])
 
 
+class OneHot(ChunkProcessor):
+    def __init__(self, tensor_name, num_classes):
+        self.num_classes = num_classes
+        self.tensor_name = tensor_name
+    def __call__(self, chunk):
+        assert len(chunk[self.tensor_name].shape) == 3, "Wrong shape for 'batch_target'. Expected (B,H,W). Received {}".format(chunk[self.tensor_name].shape)
+        chunk[self.tensor_name] = tf.one_hot(chunk[self.tensor_name], self.num_classes)
+
+class Argmax(ChunkProcessor):
+    def __init__(self, tensor_name):
+        self.tensor_name = tensor_name
+    def __call__(self, chunk):
+        chunk[self.tensor_name] = tf.argmax(chunk[self.tensor_name], axis=-1)
+
+
 # from tf1, untested
 
 class UnSparsify(ChunkProcessor):
@@ -86,16 +101,6 @@ class Softmax(ChunkProcessor):
     def __call__(self, chunk):
         assert chunk["batch_logits"].shape[-1] > 1, "It doesn't mean anything to take the softmax of a single output feature map"
         chunk["batch_softmax"] = tf.nn.softmax(chunk["batch_logits"])
-
-class OneHot(ChunkProcessor):
-    def __init__(self, tensor_name, num_classes):
-        self.num_classes = num_classes
-        self.tensor_name = tensor_name
-        self.on_value = 1.0
-        self.off_value = 0.0
-    def __call__(self, chunk):
-        assert len(chunk[self.tensor_name].shape) == 3, "Wrong shape for 'batch_target'. Expected (B,H,W). Received {}".format(chunk[self.tensor_name].shape)
-        chunk[self.tensor_name] = tf.one_hot(chunk[self.tensor_name], self.num_classes, on_value=self.on_value, off_value=self.off_value)
 
 class OneHotTarget(OneHot):
     def __init__(self, *args, **kwargs):
