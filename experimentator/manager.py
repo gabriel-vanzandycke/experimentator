@@ -54,6 +54,9 @@ class Job():
         self.grid_sample = grid_sample or {}
         self.status = JobStatus.TODO
 
+    def update_ast(self, **kwargs):
+        return update_ast(self.config_tree, dict(kwargs)) # dict makes a copy
+
     @property
     def config_str(self):
         return astunparse.unparse(self.config_tree)
@@ -82,7 +85,7 @@ class Job():
         worker_id = self._get_worker_id(runtime_cfg.pop("worker_ids", None))
 
         # Update config tree with runtime config
-        update_ast(self.config_tree, dict(runtime_cfg)) # dict makes a copy
+        self.update_ast(**runtime_cfg)
 
         # Write config string to file
         folder = os.path.join(project_name, experiment_id)
@@ -124,17 +127,21 @@ class ExperimentManager():
         self.side_runner = SideRunner(thread_count=num_workers) if num_workers > 0 else None
 
         with open(find(filename)) as f:
-            if not grid_search:
-                self.jobs = [Job(filename, f.read())]
-            else:
-                self.jobs = []
+            try:
                 tree = ast.parse(f.read())
-                for grid_sample in product_kwargs(**grid_search):
-                    tree = copy.deepcopy(tree)
-                    unoverwritten = update_ast(tree, dict(grid_sample)) # dict makes a copy
-                    self.jobs.append(Job(filename, config_tree=tree, grid_sample=grid_sample))
-                if unoverwritten:
-                    self.logger.warning("Un-overwritten kwargs: {}".format(unoverwritten))
+            except SyntaxError as e:
+                raise e
+
+        if not grid_search:
+            self.jobs = [Job(filename, config_tree=tree)]
+        else:
+            self.jobs = []
+            for grid_sample in product_kwargs(**grid_search):
+                job = Job(filename, config_tree=copy.deepcopy(tree), grid_sample=grid_sample)
+                unoverwritten = job.update_ast(**grid_sample) # dict makes a copy
+                self.jobs.append(job)
+            if unoverwritten:
+                self.logger.warning("Un-overwritten kwargs: {}".format(unoverwritten))
 
     @lazyproperty
     def worker_ids(self):
