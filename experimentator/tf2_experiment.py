@@ -1,4 +1,7 @@
+import os
+import glob
 import numpy as np
+import logging
 import tensorflow as tf
 from tensorflow.python.client import timeline # pylint: disable=no-name-in-module, unused-import
 from .base_experiment import BaseExperiment, lazyproperty
@@ -8,7 +11,7 @@ from .callbacked_experiment import Callback
 class TensorflowExperiment(BaseExperiment):
     run_options = None  # overwritten by callbacks
     run_metadata = None # overwritten by callbacks
-
+    weights_suffix = "_weights"
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         tf.config.set_soft_device_placement(False)
@@ -40,11 +43,13 @@ class TensorflowExperiment(BaseExperiment):
     def optimizer(self):
         return self.cfg["optimizer"]
 
-    def load_weights(self, filename):
+    def load_weights(self, filename="auto"):
+        if filename == "auto":
+            filename = sorted(glob.glob(os.path.join(os.path.dirname(self.cfg["filename"]), f"*{self.weights_suffix}.index")))[-1].replace(".index", "")
+        logging.info(f"loading '{filename}'")
         self.train_model.load_weights(filename)
 
     def save_weights(self, filename):
-        print("pad with 0s")
         self.train_model.save_weights(filename)
 
     # @lazyproperty

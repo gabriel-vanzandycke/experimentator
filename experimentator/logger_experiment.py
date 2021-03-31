@@ -162,7 +162,7 @@ class SaveWeights(Callback):
         if     (self.strategy == "best" and (self.min_loss is None or loss < self.min_loss)) \
             or (self.strategy == "all"):
             self.min_loss = loss
-            self.exp.save_weights(f"{self.exp.folder}/{epoch:04d}_weights")
+            self.exp.save_weights(f"{self.exp.folder}/{epoch:04d}{self.exp.weights_suffix}")
         
 
 # class LogExperiment(Callback):

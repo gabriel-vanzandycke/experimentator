@@ -1,10 +1,15 @@
 import os
 import json
+import pandas
+import logging
 import wandb
 from .callbacked_experiment import Callback
 
 class LogStateWandB(Callback):
     precedence = 100 # very last
+    state = {}
+    def __init__(self, **d):
+        self.d = d
     def init(self, exp): # pylint: disable=super-init-not-called
         os.environ["WANDB_SILENT"] = "true"
         project_name = exp.get("project_name", "unknown_project")
@@ -25,5 +30,10 @@ class LogStateWandB(Callback):
     def on_cycle_end(self, subset, state, **_):
         self.state.update({subset + "_" + k: v for k,v in state.items()})
     def on_epoch_end(self, **_):
-        wandb.log(self.state) # log *once* per epoch
-
+        report = {}
+        for key, data in self.state.items():
+            if isinstance(data, pandas.DataFrame):
+                report[key] = wandb.Table(dataframe=data)
+            else:
+                report[key] = data
+        wandb.log(report) # log *once* per epoch

@@ -90,7 +90,7 @@ class Job():
         # Write config string to file
         folder = os.path.join(project_name, experiment_id)
         mkdir(folder)
-        filename = os.path.join(folder, f"{project_name}_{experiment_id}.py")
+        filename = os.path.join(folder, "config.py")#f"{project_name}_{experiment_id}.py")
         with open(filename, "w") as f:
             f.write(self.config_str)
 
