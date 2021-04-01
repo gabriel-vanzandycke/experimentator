@@ -45,7 +45,12 @@ class TensorflowExperiment(BaseExperiment):
 
     def load_weights(self, filename="auto"):
         if filename == "auto":
-            filename = sorted(glob.glob(os.path.join(os.path.dirname(self.cfg["filename"]), f"*{self.weights_suffix}.index")))[-1].replace(".index", "")
+            dirname = os.path.dirname(self.cfg["filename"])
+            try:
+                filename = sorted(glob.glob(os.path.join(dirname, f"*{self.weights_suffix}.index")))[-1].replace(".index", "")
+            except IndexError:
+                logging.error(f"Impossible to load weights in '{dirname}'. Use the 'filename' argument.")
+                return
         logging.info(f"loading '{filename}'")
         self.train_model.load_weights(filename)
 
