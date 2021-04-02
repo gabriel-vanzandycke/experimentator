@@ -52,7 +52,9 @@ class CallbackedExperiment(BaseExperiment): # pylint: disable=abstract-method
 
 class Callback():
     precedence = 10
+    events = ["epoch_begin", "cycle_begin", "batch_begin", "batch_end", "cycle_end", "epoch_end"]
     def fire(self, event, state):
+        assert event in self.events, f"Unknown event: {event}. Available events are {self.events}"
         cb = getattr(self, "on_{}".format(event), None)
         if cb:
             cb(**state, state=state) # pylint: disable=not-callable
