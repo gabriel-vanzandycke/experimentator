@@ -7,6 +7,9 @@ from .logger_experiment import LoggerCallback
 os.environ["WANDB_SILENT"] = "true"
 
 class LogStateWandB(LoggerCallback):
+    best_report = {}
+    def __init__(self, criterion_metric=None):
+        self.criterion_metric = criterion_metric
     @lazyproperty
     def wandb(self):
         wandb.init(
@@ -27,3 +30,9 @@ class LogStateWandB(LoggerCallback):
             else:
                 report[key] = data
         self.wandb.log(report) # log *once* per epoch
+
+        if self.criterion_metric and self.criterion_metric in report:
+            if not self.best_report or report[self.criterion_metric] > self.best_report[self.criterion_metric]:
+                self.best_report = report
+            self.wandb.run.summary.update(self.best_report)
+
