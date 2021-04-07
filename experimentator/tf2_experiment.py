@@ -66,19 +66,24 @@ class TensorflowExperiment(BaseExperiment):
     #     checkpoint_dir = os.path.join()
     #     tf.train.CheckpointManager(self.checkpoint, )
 
+    def __init_inputs(self, data):
+        if "inputs" not in self.__dict__:
+            self.__data = data
+            _ = self.inputs
+            del self.__data
+
     @lazyproperty
     def inputs(self):
-        # extract first dataset item which is not None to compute placeholders dimensions and types
-        data = next(self.dataset.query_item(k) for k in iter(self.dataset.keys) if self.dataset.query_item(k))
+        data = self.__data # temporary variable holding the dictionary of batched data
         inputs = {}
         skipped = []
         for tensor_name in data:
             if isinstance(data[tensor_name], (np.ndarray, np.int32, int, float)):
                 with tf.device(self.device):
-                    inputs["batch_{}".format(tensor_name)] = tf.keras.Input(
+                    inputs[tensor_name] = tf.keras.Input(
                         dtype=tf.dtypes.as_dtype(data[tensor_name].dtype),
-                        shape=data[tensor_name].shape,
-                        name="batch_{}".format(tensor_name)
+                        shape=data[tensor_name].shape[1:], # removing batch dimension in tf.keras.Input
+                        name=tensor_name
                     )
             else:
                 skipped.append(tensor_name)
@@ -136,12 +141,15 @@ class TensorflowExperiment(BaseExperiment):
         return {k:v for k,v in data.items() if k in self.inputs}
 
     def batch_train(self, data):
+        self.__init_inputs(data)
         _ = self.train_model # forces lazyproperties to be created as attributes before wrapping with tf.function decorator
         return self._batch_train(self.select_data(data))
     def batch_eval(self, data):
+        self.__init_inputs(data)
         _ = self.eval_model # forces lazyproperties to be created as attributes before wrapping with tf.function decorator
         return self._batch_eval(self.select_data(data))
     def batch_infer(self, data):
+        self.__init_inputs(data)
         _ = self.infer_model # forces lazyproperties to be created as attributes before wrapping with tf.function decorator
         return self._batch_infer(self.select_data(data))
 
