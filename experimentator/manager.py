@@ -29,7 +29,7 @@ def update_ast(tree, overwrite):
             continue
         for target in node.targets:
             assert isinstance(target, ast.Name), "Tuple assignation is not allowed in config files (e.g. `a,b=1,2`). {}".format(type(target))
-            assert target.id not in met_targets, "Double assignation is not allowed in config files. The variable assigned twice is '{}'".format(target.id)
+            assert target.id not in met_targets, "Double assignation is not allowed in config files. '{}' seems to be assigned twice.".format(target.id)
             if target.id in overwrite:
                 assert isinstance(node.value, ast.Constant), "Only overwritting constants is currently supported"
                 # Replace node value by the value in overwrite
@@ -85,12 +85,14 @@ class Job():
         worker_id = self._get_worker_id(runtime_cfg.pop("worker_ids", None))
 
         # Update config tree with runtime config
-        self.update_ast(**runtime_cfg)
+        unoverwritten = self.update_ast(**runtime_cfg)
+        if unoverwritten:
+            logging.warning("Un-overwritten runtime kwargs: {}".format(unoverwritten))
 
         # Write config string to file
         folder = os.path.join(project_name, experiment_id)
         mkdir(folder)
-        filename = os.path.join(folder, "config.py")#f"{project_name}_{experiment_id}.py")
+        filename = os.path.join(folder, "config.py")
         with open(filename, "w") as f:
             f.write(self.config_str)
 
