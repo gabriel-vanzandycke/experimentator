@@ -58,6 +58,8 @@ class Callback():
         cb = getattr(self, "on_{}".format(event), None)
         if cb:
             cb(**state, state=state) # pylint: disable=not-callable
+    def __str__(self):
+        return self.__class__.__name__
 
 class InitState(Callback):
     precedence = 0 # very first
