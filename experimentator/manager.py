@@ -87,7 +87,7 @@ class Job():
         # Update config tree with runtime config
         unoverwritten = self.update_ast(**runtime_cfg)
         if unoverwritten:
-            logging.warning("Un-overwritten runtime kwargs: {}".format(unoverwritten))
+            logging.warning("Un-overwritten runtime kwargs: {}".format(list(unoverwritten.keys())))
 
         # Write config string to file
         folder = os.path.join(project_name, experiment_id)
@@ -143,7 +143,7 @@ class ExperimentManager():
                 unoverwritten = job.update_ast(**grid_sample) # dict makes a copy
                 self.jobs.append(job)
             if unoverwritten:
-                self.logger.warning("Un-overwritten kwargs: {}".format(unoverwritten))
+                self.logger.warning("Un-overwritten kwargs: {}".format(list(unoverwritten.keys())))
 
     @lazyproperty
     def worker_ids(self):
