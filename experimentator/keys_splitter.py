@@ -30,4 +30,5 @@ class Subset():
 
 
 class KeysSplitter(): # pylint: disable=too-few-public-methods
-    pass
+    def __str__(self):
+        return self.__class__.__name__
