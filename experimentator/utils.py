@@ -218,7 +218,7 @@ class DataCollector(dict):
             except EOFError:
                 if self.history:
                     for k,v in self.history[-1].items():
-                        self.__setitem__(k,v, True)
+                        self.__setitem__(k,v, skip_external=True)
             self.file.close()
             self.file = None
 
@@ -288,11 +288,18 @@ class DataCollector(dict):
         super().__delitem__(key)
         del self.tmp_dict[key]
 
+    def pop(self, key, skip_external=False):
+        value = self.__getitem__(key, skip_external=skip_external)
+        del self[key]
+        return value
+
+    def update(self, **kwargs):
+        for k,v in kwargs.items():
+            self[k] = v
+
     def checkpoint(self, *keys):
-        if not keys:
-            keys = self.keys()
-        checkpoint = {key: self.__getitem__(key, True) for key in keys}
-        self.tmp_dict.clear()
+        keys = keys or list(self.keys())
+        checkpoint = {key: self.pop(key, skip_external=True) for key in keys}
         self.history.append(checkpoint)
         if self.filename:
             # Open file if not done already
