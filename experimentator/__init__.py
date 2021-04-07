@@ -1,6 +1,6 @@
 import utils
 from .base_experiment import BaseExperiment, AsyncExperiment, DummyExperiment
-from .logger_experiment import LoggedExperiment, NotebookExperiment, LogState, SaveWeights
+from .logger_experiment import SaveWeights, LoggerCallback, LogStateDataCollector
 from .keys_splitter import KeysSplitter, Subset
 from .manager import ExperimentManager#, ExperimentManagerNotebook
 from .callbacked_experiment import Callback, CallbackedExperiment, InitState, MeasureTime, AverageLoss, AccumulateBatchMetrics
