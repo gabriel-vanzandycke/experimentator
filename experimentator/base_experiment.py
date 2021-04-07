@@ -12,6 +12,9 @@ class BaseExperiment():
     def __del__(self):
         pass
 
+    def __str__(self):
+        return self.__class__.__name__
+
     def update(self, **kwargs):
         self.cfg.update(**kwargs)
 
