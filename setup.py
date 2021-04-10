@@ -17,6 +17,7 @@ setup(
         "matplotlib",
         "ipywidgets",
         "tqdm",
-        "IPython"
+        "IPython",
+        "pandas"
     ],
 )
