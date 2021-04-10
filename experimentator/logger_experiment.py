@@ -26,10 +26,12 @@ class LoggerCallback(Callback, metaclass=abc.ABCMeta):
     state = {}
     def init(self, exp): # pylint: disable=super-init-not-called
         self.project_name = exp.get("project_name", "unknown_project")
+        self.run_name = json.dumps(exp.grid_sample)
+        self.config = {k:str(v) for k,v in exp.cfg.items() if not isinstance(v, types.ModuleType)} # list and dictionnaries don't get printed correctly
+
         grid_sample = dict(exp.grid_sample) # copies the original dictionary
         grid_sample.pop("fold", None)       # removes 'fold' to be able to group runs
-        self.run_name = json.dumps(grid_sample)
-        self.config = {k:str(v) for k,v in exp.cfg.items() if not isinstance(v, types.ModuleType)}
+        self.config["group"] = grid_sample
     def on_epoch_begin(self, **_):
         self.state = {}
     def on_cycle_end(self, subset, state, **_):
