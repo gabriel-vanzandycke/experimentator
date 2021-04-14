@@ -107,6 +107,13 @@ class OneHotTarget(OneHot):
     def __init__(self, *args, **kwargs):
         super().__init__(tensor_name="batch_target", *args, **kwargs)
 
+class StopGradients(ChunkProcessor):
+    def __init__(self, exceptions=None):
+        self.exceptions = exceptions or []
+    def __call__(self, chunk):
+        for name in chunk:
+            if name not in self.exceptions:
+                chunk[name] = tf.stop_gradient(chunk[name])
 
 class SoftmaxCrossEntropyLossMap(ChunkProcessor):
     def __init__(self, label_smoothing=0):

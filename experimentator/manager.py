@@ -12,6 +12,7 @@ import threading
 import astunparse
 from mlworkflow import SideRunner, lazyproperty
 from .utils import find, mkdir
+from .tf2_experiment import TensorflowExperiment
 
 # pylint: disable=logging-fstring-interpolation
 
@@ -69,6 +70,7 @@ class Job():
 
     @lazyproperty
     def exp(self):
+        #TensorflowExperiment.init_runtime(0, True) # TODO: fix this
         return type("Exp", tuple(self.config["experiment_type"][::-1]), {})(self.config)
 
     @staticmethod
@@ -95,6 +97,12 @@ class Job():
         filename = os.path.join(folder, "config.py")
         with open(filename, "w") as f:
             f.write(self.config_str)
+
+        # Init GPU runtime
+        # TODO: We need a way to init runtime BEFORE the 'exec(self.config_str)' call.
+        #       However, currently we only know the experiment type AFTER the 'exec(self.config_str)' call.
+        #       As a consequence, only TensorFlow is currently supported in this framework.
+        TensorflowExperiment.init_runtime(worker_id or 0, True)
 
         # Add run and project names
         self.config.update(project_name=project_name, experiment_id=experiment_id, worker_id=worker_id, folder=folder)

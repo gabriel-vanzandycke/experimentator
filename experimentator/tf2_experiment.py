@@ -7,25 +7,31 @@ from tensorflow.python.client import timeline # pylint: disable=no-name-in-modul
 from .base_experiment import BaseExperiment, lazyproperty
 from .callbacked_experiment import Callback
 
+os.environ['AUTOGRAPH_VERBOSITY'] = "5"
+
+def print_tensor(x, message=None):
+    def print_function(x):
+        if message is not None:
+            tf.print(message)
+        tf.print(x)
+        return x
+    return tf.keras.layers.Lambda(print_function)(x)
 
 class TensorflowExperiment(BaseExperiment):
     run_options = None  # overwritten by callbacks
     run_metadata = None # overwritten by callbacks
     weights_suffix = "_weights"
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+
+    @staticmethod
+    def init_runtime(gpu_index=0, memory_growth=False):
         tf.config.set_soft_device_placement(False)
         physical_devices = tf.config.list_physical_devices('GPU')
-        if physical_devices:
-            device_index = self.get("worker_id", self.get("GPU", 0))
-            if device_index is None:
-                device_index = 0
-            visible_devices = [physical_devices[device_index]] # one single visible device for now
-            tf.config.set_visible_devices(visible_devices, device_type="GPU")
+        visible_devices = [physical_devices[gpu_index]]
+        tf.config.set_visible_devices(visible_devices, device_type="GPU")
+        if memory_growth:
             for device in visible_devices:
-                tf.config.experimental.set_memory_growth(device, enable=True)
-        tf.config.run_functions_eagerly(self.get("eager", False))
-        self.logger.debug(str(self.device) + str([device.name for device in tf.config.get_visible_devices()]))
+                tf.config.experimental.set_memory_growth(device, enable=memory_growth)
+        #self.logger.debug(str(self.device) + str([device.name for device in tf.config.get_visible_devices()]))
 
     @lazyproperty
     def metrics(self):
@@ -74,12 +80,16 @@ class TensorflowExperiment(BaseExperiment):
 
     @lazyproperty
     def inputs(self):
-        data = self.__data # temporary variable holding the dictionary of batched data
+        try:
+            data = self.__data # temporary variable holding the dictionary of batched data
+        except AttributeError:
+            # TODO: self.dataset.keys.all() can be slow
+            data = next(iter(self.batch_generator(self.dataset.keys.all(), batch_size=self.batch_size)))[1]
         inputs = {}
         skipped = []
         for tensor_name in data:
             if isinstance(data[tensor_name], (np.ndarray, np.int32, int, float)):
-                with tf.device(self.device):
+                if True:#with tf.device(self.device):
                     inputs[tensor_name] = tf.keras.Input(
                         dtype=tf.dtypes.as_dtype(data[tensor_name].dtype),
                         shape=data[tensor_name].shape[1:], # removing batch dimension in tf.keras.Input
@@ -93,7 +103,7 @@ class TensorflowExperiment(BaseExperiment):
 
     @lazyproperty
     def chunk_processors(self):
-        with tf.device(self.device):
+        if True:#with tf.device(self.device):
             return [CP for CP in self.cfg["chunk_processors"] if CP is not None] # cannot be a dict in case a ChunkProcessor is used twice
 
     @lazyproperty
@@ -101,28 +111,28 @@ class TensorflowExperiment(BaseExperiment):
         chunk = self.inputs.copy() # copies the dictionary, but not its values (passed by reference) to be used again in the model instanciation
         for chunk_processor in self.chunk_processors:
             with tf.name_scope(chunk_processor.__class__.__name__):
-                with tf.device(self.device):
+                if True:#with tf.device(self.device):
                     chunk_processor(chunk)
         return chunk
 
     @lazyproperty
     def train_model(self):
-        with tf.device(self.device):
+        if True:#with tf.device(self.device):
             return tf.keras.Model(self.inputs, {"loss": self.chunk["loss"], **self.metrics})
 
     @lazyproperty
     def eval_model(self):
-        with tf.device(self.device):
+        if True:#with tf.device(self.device):
             return tf.keras.Model(self.inputs, {"loss": self.chunk["loss"], **self.metrics, **self.outputs})
 
     @lazyproperty
     def infer_model(self):
-        with tf.device(self.device):
+        if True:#with tf.device(self.device):
             return tf.keras.Model(self.inputs, self.outputs)
 
     @tf.function
     def _batch_train(self, inputs):
-        with tf.device(self.device):
+        if True:#with tf.device(self.device):
             with tf.GradientTape() as tape:
                 results = self.train_model(inputs, training=True)
             grads = tape.gradient(results["loss"], self.train_model.trainable_weights)
