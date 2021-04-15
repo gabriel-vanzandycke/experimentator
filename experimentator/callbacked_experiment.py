@@ -40,13 +40,13 @@ class CallbackedExperiment(BaseExperiment): # pylint: disable=abstract-method
         self.state["subset"] = subset.name
         self.state["batch"] = 0
         self.fire("cycle_begin")
-        super().run_cycle(subset, *args, **kwargs)
+        super().run_cycle(subset=subset, *args, **kwargs)
         self.fire("cycle_end")
 
     def run_epoch(self, epoch, *args, **kwargs):
         self.state["epoch"] = epoch
         self.fire("epoch_begin")
-        super().run_epoch(epoch, *args, **kwargs)
+        super().run_epoch(epoch=epoch, *args, **kwargs)
         self.fire("epoch_end")
 
 

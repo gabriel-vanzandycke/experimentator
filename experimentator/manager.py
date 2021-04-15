@@ -70,7 +70,6 @@ class Job():
 
     @lazyproperty
     def exp(self):
-        #TensorflowExperiment.init_runtime(0, True) # TODO: fix this
         return type("Exp", tuple(self.config["experiment_type"][::-1]), {})(self.config)
 
     @staticmethod
@@ -97,12 +96,6 @@ class Job():
         filename = os.path.join(folder, "config.py")
         with open(filename, "w") as f:
             f.write(self.config_str)
-
-        # Init GPU runtime
-        # TODO: We need a way to init runtime BEFORE the 'exec(self.config_str)' call.
-        #       However, currently we only know the experiment type AFTER the 'exec(self.config_str)' call.
-        #       As a consequence, only TensorFlow is currently supported in this framework.
-        TensorflowExperiment.init_runtime(worker_id or 0, True)
 
         # Add run and project names
         self.config.update(project_name=project_name, experiment_id=experiment_id, worker_id=worker_id, folder=folder)
@@ -177,7 +170,6 @@ def main():
     parser = argparse.ArgumentParser(description="Experimentation library", prog="experimentator")
     parser.add_argument("filename")
     parser.add_argument("--epochs", type=int)
-    parser.add_argument('--workers', type=int, default=0)
     parser.add_argument('--logfile', type=str, default=None)# type=argparse.FileType('w', encoding='UTF-8')
     parser.add_argument('--grid', nargs="*")
     parser.add_argument('--kwargs', nargs="*", action='append')
@@ -191,7 +183,7 @@ def main():
     for kwarg in [kwarg for kwargs in args.kwargs or [[]] for kwarg in kwargs]: # Flattened appended kwargs
         exec(kwarg, None, kwargs) # pylint: disable=exec-used
 
-    manager = ExperimentManager(args.filename, num_workers=args.workers, logfile=args.logfile, **grid)
+    manager = ExperimentManager(args.filename, logfile=args.logfile, **grid)
     manager.execute(args.epochs, **kwargs)
 
 

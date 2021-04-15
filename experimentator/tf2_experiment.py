@@ -7,7 +7,10 @@ from tensorflow.python.client import timeline # pylint: disable=no-name-in-modul
 from .base_experiment import BaseExperiment, lazyproperty
 from .callbacked_experiment import Callback
 
-os.environ['AUTOGRAPH_VERBOSITY'] = "5"
+#os.environ['AUTOGRAPH_VERBOSITY'] = "5"
+#tf.config.set_soft_device_placement(False)
+for device in tf.config.list_physical_devices('GPU'):
+    tf.config.experimental.set_memory_growth(device, enable=True)
 
 def print_tensor(x, message=None):
     def print_function(x):
@@ -21,17 +24,6 @@ class TensorflowExperiment(BaseExperiment):
     run_options = None  # overwritten by callbacks
     run_metadata = None # overwritten by callbacks
     weights_suffix = "_weights"
-
-    @staticmethod
-    def init_runtime(gpu_index=0, memory_growth=False):
-        tf.config.set_soft_device_placement(False)
-        physical_devices = tf.config.list_physical_devices('GPU')
-        visible_devices = [physical_devices[gpu_index]]
-        tf.config.set_visible_devices(visible_devices, device_type="GPU")
-        if memory_growth:
-            for device in visible_devices:
-                tf.config.experimental.set_memory_growth(device, enable=memory_growth)
-        #self.logger.debug(str(self.device) + str([device.name for device in tf.config.get_visible_devices()]))
 
     @lazyproperty
     def metrics(self):
@@ -89,12 +81,11 @@ class TensorflowExperiment(BaseExperiment):
         skipped = []
         for tensor_name in data:
             if isinstance(data[tensor_name], (np.ndarray, np.int32, int, float)):
-                if True:#with tf.device(self.device):
-                    inputs[tensor_name] = tf.keras.Input(
-                        dtype=tf.dtypes.as_dtype(data[tensor_name].dtype),
-                        shape=data[tensor_name].shape[1:], # removing batch dimension in tf.keras.Input
-                        name=tensor_name
-                    )
+                inputs[tensor_name] = tf.keras.Input(
+                    dtype=tf.dtypes.as_dtype(data[tensor_name].dtype),
+                    shape=data[tensor_name].shape[1:], # removing batch dimension in tf.keras.Input
+                    name=tensor_name
+                )
             else:
                 skipped.append(tensor_name)
         if skipped:
@@ -103,65 +94,62 @@ class TensorflowExperiment(BaseExperiment):
 
     @lazyproperty
     def chunk_processors(self):
-        if True:#with tf.device(self.device):
-            return [CP for CP in self.cfg["chunk_processors"] if CP is not None] # cannot be a dict in case a ChunkProcessor is used twice
+        return [CP for CP in self.cfg["chunk_processors"] if CP is not None] # cannot be a dict in case a ChunkProcessor is used twice
 
     @lazyproperty
     def chunk(self):
         chunk = self.inputs.copy() # copies the dictionary, but not its values (passed by reference) to be used again in the model instanciation
         for chunk_processor in self.chunk_processors:
             with tf.name_scope(chunk_processor.__class__.__name__):
-                if True:#with tf.device(self.device):
-                    chunk_processor(chunk)
+                chunk_processor(chunk)
         return chunk
 
     @lazyproperty
     def train_model(self):
-        if True:#with tf.device(self.device):
-            return tf.keras.Model(self.inputs, {"loss": self.chunk["loss"], **self.metrics})
+        return tf.keras.Model(self.inputs, {"loss": self.chunk["loss"]})
 
     @lazyproperty
     def eval_model(self):
-        if True:#with tf.device(self.device):
-            return tf.keras.Model(self.inputs, {"loss": self.chunk["loss"], **self.metrics, **self.outputs})
+        return tf.keras.Model(self.inputs, {"loss": self.chunk["loss"], **self.metrics, **self.outputs})
 
     @lazyproperty
     def infer_model(self):
-        if True:#with tf.device(self.device):
-            return tf.keras.Model(self.inputs, self.outputs)
+        return tf.keras.Model(self.inputs, self.outputs)
 
+    @staticmethod
     @tf.function
-    def _batch_train(self, inputs):
-        if True:#with tf.device(self.device):
-            with tf.GradientTape() as tape:
-                results = self.train_model(inputs, training=True)
-            grads = tape.gradient(results["loss"], self.train_model.trainable_weights)
-            self.optimizer.apply_gradients(zip(grads, self.train_model.trainable_weights))
+    def _train_step(inputs, model, optimizer):
+        with tf.GradientTape() as tape:
+            results = model(inputs, training=True)
+        grads = tape.gradient(results["loss"], model.trainable_weights)
+        optimizer.apply_gradients(zip(grads, model.trainable_weights))
         return results
 
+    @staticmethod
     @tf.function
-    def _batch_eval(self, inputs):
-        return self.eval_model(inputs, training=False)
-
-    @tf.function
-    def _batch_infer(self, inputs):
-        return self.infer_model(inputs, training=False)
+    def _eval_step(inputs, model):
+        return model(inputs, training=False)
 
     def select_data(self, data):
         return {k:v for k,v in data.items() if k in self.inputs}
 
     def batch_train(self, data):
         self.__init_inputs(data)
-        _ = self.train_model # forces lazyproperties to be created as attributes before wrapping with tf.function decorator
-        return self._batch_train(self.select_data(data))
+        tf.keras.utils.plot_model(self.train_model, to_file="model.png")#, show_shapes=True, show_dtype=True, expand_nested=True)
+        raise
+        return self._train_step(self.select_data(data), self.__model, self.optimizer)
+
     def batch_eval(self, data):
         self.__init_inputs(data)
-        _ = self.eval_model # forces lazyproperties to be created as attributes before wrapping with tf.function decorator
-        return self._batch_eval(self.select_data(data))
+        return self._eval_step(self.select_data(data), self.__model)
+
     def batch_infer(self, data):
         self.__init_inputs(data)
-        _ = self.infer_model # forces lazyproperties to be created as attributes before wrapping with tf.function decorator
-        return self._batch_infer(self.select_data(data))
+        return self._eval_step(self.select_data(data), self.__model)
+
+    def set_mode(self, mode):
+        self.__model = self.train_model if mode == "TRAIN" else self.eval_model
+
 
 
 

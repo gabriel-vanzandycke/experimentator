@@ -4,19 +4,13 @@ from utils import linestyles
 
 class Subset():
     random_count = 0
-    def __init__(self, name, mode, keys, frequency=1, repetitions=1, legend=None):
+    def __init__(self, name, type, keys, repetitions=1, legend=None):
         self.name = name
-        self.mode = mode
+        self.type = type
         self.keys = keys
         self.linestyle = linestyles.get(name, "dotted")
-        self.frequency = 1 if mode == "TRAIN" else frequency
-        self.repetitions = 1 if mode == "TRAIN" else repetitions
+        self.repetitions = 1 if type == "TRAIN" else repetitions
         self.legend = legend or self.name
-
-    def do_run_epoch(self, epoch):
-        if (epoch % self.frequency) != 0:
-            return False
-        return True
 
     @property
     def shuffeled_keys(self):

@@ -1,10 +1,11 @@
+import abc
 import logging
 from tqdm.auto import tqdm
 
 from mlworkflow import SideRunner, lazyproperty, TransformedDataset, PickledDataset
 from .utils import find, RobustBatchesDataset
 
-class BaseExperiment():
+class BaseExperiment(metaclass=abc.ABCMeta):
     batch_count = 0
     def __init__(self, config):
         self.cfg = config
@@ -71,22 +72,27 @@ class BaseExperiment():
         for keys, batch in self.dataset.batches(keys, batch_size, drop_incomplete=True):
             yield keys, {"batch_{}".format(k): v for k,v in batch.items()}
 
+    @abc.abstractmethod
     def batch_infer(self, *args, **kwargs):
         raise NotImplementedError("Should be implemented in the framework specific Experiment.")
+    @abc.abstractmethod
     def batch_train(self, *args, **kwargs):
         raise NotImplementedError("Should be implemented in the framework specific Experiment.")
+    @abc.abstractmethod
     def batch_eval(self, *args, **kwargs):
         raise NotImplementedError("Should be implemented in the framework specific Experiment.")
 
     def run_batch(self, subset, data):
-        if subset.mode == "TRAIN":
+        if subset.type == "TRAIN":
             return self.batch_train(data)
-        elif subset.mode == "EVAL":
+        elif subset.type == "VALID":
             return self.batch_eval(data)
-        elif subset.mode == "INFER":
+        elif subset.type == "TEST":
             return self.batch_infer(data)
-        else:
-            raise NotImplementedError("Mode undefined: '{}' for subset '{}'".format(subset.mode, subset.name))
+
+    @abc.abstractmethod
+    def set_mode(self, mode):
+        raise NotImplementedError("Should be implemented in the framework specific Experiment.")
 
     def run_cycle(self, subset, progress):
         progress.set_description(subset.name)
@@ -98,15 +104,20 @@ class BaseExperiment():
         progress = self.progress(None, total=self.batch_count, unit="batches")
         self.batch_count = 0  # required
         for subset_name, subset in self.subsets.items():
-            assert subset.keys, "Empty subset is not allowed: {}".format(subset_name)
-            if subset.do_run_epoch(epoch):
-                self.run_cycle(subset, progress)
+            assert subset.keys, "Empty subset is not allowed because it would require to adapt all callacks: {}".format(subset_name)
+            if (epoch % self.cfg.get("eval_frequency", 10)) == 0:
+                self.set_mode("EVAL")
+            elif subset.type == "TRAIN":
+                self.set_mode("TRAIN")
+            else:
+                continue # skip this cycle for this epoch
+            self.run_cycle(subset=subset, progress=progress)
         progress.close()
 
     def train(self, epochs):
         range_epochs = range(self.epochs+1, epochs+1)
         for epoch in self.progress(range_epochs, desc="epochs"):
-            self.run_epoch(epoch)
+            self.run_epoch(epoch=epoch)
 
     def predict(self, data):
         return self.batch_infer(data)
