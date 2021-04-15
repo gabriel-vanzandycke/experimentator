@@ -134,7 +134,6 @@ class TensorflowExperiment(BaseExperiment):
         return {k:v for k,v in data.items() if k in self.inputs}
 
     def batch_train(self, data, mode=None):
-        print(data["batch_input_image"].shape)
         self.__init_inputs(data)
         model = self.train_model if not mode or mode == 'TRAIN' else self.eval_model
         return self._train_step(self.select_data(data), model, self.optimizer)
