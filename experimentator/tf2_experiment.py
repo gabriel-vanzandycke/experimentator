@@ -133,22 +133,20 @@ class TensorflowExperiment(BaseExperiment):
     def select_data(self, data):
         return {k:v for k,v in data.items() if k in self.inputs}
 
-    def batch_train(self, data):
+    def batch_train(self, data, mode=None):
+        print(data["batch_input_image"].shape)
         self.__init_inputs(data)
-        tf.keras.utils.plot_model(self.train_model, to_file="model.png")#, show_shapes=True, show_dtype=True, expand_nested=True)
-        raise
-        return self._train_step(self.select_data(data), self.__model, self.optimizer)
+        model = self.train_model if not mode or mode == 'TRAIN' else self.eval_model
+        return self._train_step(self.select_data(data), model, self.optimizer)
 
     def batch_eval(self, data):
         self.__init_inputs(data)
-        return self._eval_step(self.select_data(data), self.__model)
+        return self._eval_step(self.select_data(data), self.eval_model)
 
     def batch_infer(self, data):
         self.__init_inputs(data)
-        return self._eval_step(self.select_data(data), self.__model)
+        return self._eval_step(self.select_data(data), self.eval_model)
 
-    def set_mode(self, mode):
-        self.__model = self.train_model if mode == "TRAIN" else self.eval_model
 
 
 

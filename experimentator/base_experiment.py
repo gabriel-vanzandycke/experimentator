@@ -82,22 +82,18 @@ class BaseExperiment(metaclass=abc.ABCMeta):
     def batch_eval(self, *args, **kwargs):
         raise NotImplementedError("Should be implemented in the framework specific Experiment.")
 
-    def run_batch(self, subset, data):
+    def run_batch(self, subset, data, mode=None):
         if subset.type == "TRAIN":
-            return self.batch_train(data)
+            return self.batch_train(data, mode)
         elif subset.type == "VALID":
             return self.batch_eval(data)
         elif subset.type == "TEST":
-            return self.batch_infer(data)
+            return self.batch_eval(data)
 
-    @abc.abstractmethod
-    def set_mode(self, mode):
-        raise NotImplementedError("Should be implemented in the framework specific Experiment.")
-
-    def run_cycle(self, subset, progress):
+    def run_cycle(self, subset, mode, progress):
         progress.set_description(subset.name)
         for keys, data in self.batch_generator(subset.shuffeled_keys): # pylint: disable=unused-variable
-            _ = self.run_batch(subset=subset, data=data)
+            _ = self.run_batch(subset=subset, mode=mode, data=data)
             progress.update(1)
 
     def run_epoch(self, epoch):
@@ -106,12 +102,12 @@ class BaseExperiment(metaclass=abc.ABCMeta):
         for subset_name, subset in self.subsets.items():
             assert subset.keys, "Empty subset is not allowed because it would require to adapt all callacks: {}".format(subset_name)
             if (epoch % self.cfg.get("eval_frequency", 10)) == 0:
-                self.set_mode("EVAL")
-            elif subset.type == "TRAIN":
-                self.set_mode("TRAIN")
+                mode = 'EVAL'
+            elif subset.type == 'TRAIN':
+                mode = 'TRAIN'
             else:
                 continue # skip this cycle for this epoch
-            self.run_cycle(subset=subset, progress=progress)
+            self.run_cycle(subset=subset, mode=mode, progress=progress)
         progress.close()
 
     def train(self, epochs):
