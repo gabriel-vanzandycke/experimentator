@@ -1,9 +1,17 @@
 import abc
 import logging
 from tqdm.auto import tqdm
+from enum import Flag, auto
 
 from mlworkflow import SideRunner, lazyproperty, TransformedDataset, PickledDataset
 from .utils import find, RobustBatchesDataset
+
+
+class ExperimentMode(Flag):
+    NONE = 0
+    TRAIN = auto()
+    EVAL = auto()
+    ALL = -1
 
 class BaseExperiment(metaclass=abc.ABCMeta):
     batch_count = 0
@@ -82,7 +90,7 @@ class BaseExperiment(metaclass=abc.ABCMeta):
     def batch_eval(self, *args, **kwargs):
         raise NotImplementedError("Should be implemented in the framework specific Experiment.")
 
-    def run_batch(self, subset, data, mode=None):
+    def run_batch(self, subset, data, mode=ExperimentMode.ALL):
         if subset.type == "TRAIN":
             return self.batch_train(data, mode)
         elif subset.type == "VALID":
@@ -90,7 +98,7 @@ class BaseExperiment(metaclass=abc.ABCMeta):
         elif subset.type == "TEST":
             return self.batch_eval(data)
 
-    def run_cycle(self, subset, mode, progress):
+    def run_cycle(self, subset, mode: ExperimentMode, progress):
         progress.set_description(subset.name)
         for keys, data in self.batch_generator(subset.shuffeled_keys): # pylint: disable=unused-variable
             _ = self.run_batch(subset=subset, mode=mode, data=data)
@@ -102,9 +110,9 @@ class BaseExperiment(metaclass=abc.ABCMeta):
         for subset_name, subset in self.subsets.items():
             assert subset.keys, "Empty subset is not allowed because it would require to adapt all callacks: {}".format(subset_name)
             if (epoch % self.cfg.get("eval_frequency", 10)) == 0:
-                mode = 'EVAL'
+                mode = ExperimentMode.EVAL
             elif subset.type == 'TRAIN':
-                mode = 'TRAIN'
+                mode = ExperimentMode.TRAIN
             else:
                 continue # skip this cycle for this epoch
             self.run_cycle(subset=subset, mode=mode, progress=progress)

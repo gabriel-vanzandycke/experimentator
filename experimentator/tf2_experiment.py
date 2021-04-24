@@ -4,7 +4,7 @@ import numpy as np
 import logging
 import tensorflow as tf
 from tensorflow.python.client import timeline # pylint: disable=no-name-in-module, unused-import
-from .base_experiment import BaseExperiment, lazyproperty
+from .base_experiment import BaseExperiment, lazyproperty, ExperimentMode
 from .callbacked_experiment import Callback
 
 #os.environ['AUTOGRAPH_VERBOSITY'] = "5"
@@ -133,9 +133,9 @@ class TensorflowExperiment(BaseExperiment):
     def select_data(self, data):
         return {k:v for k,v in data.items() if k in self.inputs}
 
-    def batch_train(self, data, mode=None):
+    def batch_train(self, data, mode=ExperimentMode.TRAIN):
         self.__init_inputs(data)
-        model = self.train_model if not mode or mode == 'TRAIN' else self.eval_model
+        model = self.train_model if mode & ExperimentMode.TRAIN else self.eval_model
         return self._train_step(self.select_data(data), model, self.optimizer)
 
     def batch_eval(self, data):
@@ -144,7 +144,7 @@ class TensorflowExperiment(BaseExperiment):
 
     def batch_infer(self, data):
         self.__init_inputs(data)
-        return self._eval_step(self.select_data(data), self.eval_model)
+        return self._eval_step(self.select_data(data), self.infer_model)
 
 
 

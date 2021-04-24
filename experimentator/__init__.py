@@ -1,5 +1,5 @@
 import utils
-from .base_experiment import BaseExperiment, AsyncExperiment, DummyExperiment
+from .base_experiment import BaseExperiment, AsyncExperiment, DummyExperiment, ExperimentMode
 from .logger_experiment import SaveWeights, LoggerCallback, LogStateDataCollector
 from .keys_splitter import KeysSplitter, Subset
 from .manager import ExperimentManager#, ExperimentManagerNotebook

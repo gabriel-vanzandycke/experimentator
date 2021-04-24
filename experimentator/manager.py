@@ -12,7 +12,6 @@ import threading
 import astunparse
 from mlworkflow import SideRunner, lazyproperty
 from .utils import find, mkdir
-from .tf2_experiment import TensorflowExperiment
 
 # pylint: disable=logging-fstring-interpolation
 
@@ -171,6 +170,7 @@ def main():
     parser.add_argument("filename")
     parser.add_argument("--epochs", type=int)
     parser.add_argument('--logfile', type=str, default=None)# type=argparse.FileType('w', encoding='UTF-8')
+    parser.add_argument("--workers", type=int, default=0)
     parser.add_argument('--grid', nargs="*")
     parser.add_argument('--kwargs', nargs="*", action='append')
     args = parser.parse_args()
