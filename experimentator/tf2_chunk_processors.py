@@ -9,19 +9,39 @@ class DoNothing(ChunkProcessor):
         pass
 
 class CastFloat(ChunkProcessor):
-    def __init__(self, tensor_name):
-        self.tensor_name = [tensor_name] if isinstance(tensor_name, str) else tensor_name
+    def __init__(self, tensor_names):
+        self.tensor_names = [tensor_names] if isinstance(tensor_names, str) else tensor_names
     def __call__(self, chunk):
-        for tensor_name in self.tensor_name:
+        for tensor_name in self.tensor_names:
             if tensor_name in chunk:
                 chunk[tensor_name] = tf.cast(chunk[tensor_name], tf.float32)
 
 class Normalize(ChunkProcessor):
-    def __init__(self, tensor_name):
-        self.tensor_name = tensor_name
+    def __init__(self, tensor_names):
+        self.tensor_names = [tensor_names] if isinstance(tensor_names, str) else tensor_names
     def __call__(self, chunk):
-        assert chunk[self.tensor_name].dtype == tf.float32
-        chunk[self.tensor_name] = chunk[self.tensor_name]/255
+        for tensor_name in self.tensor_names:
+            if tensor_name in chunk:
+                assert chunk[tensor_name].dtype == tf.float32
+                chunk[tensor_name] = chunk[tensor_name]/255
+
+class BatchStandardize(ChunkProcessor):
+    def __init__(self, tensor_names):
+        self.tensor_names = [tensor_names] if isinstance(tensor_names, str) else tensor_names
+    def __call__(self, chunk):
+        for tensor_name in self.tensor_names:
+            if tensor_name in chunk:
+                chunk[tensor_name] = tf.image.per_image_standardization(chunk[tensor_name])
+
+class DatasetStandardize(ChunkProcessor):
+    def __init__(self, tensor_names, mean, std):
+        self.tensor_names = [tensor_names] if isinstance(tensor_names, str) else tensor_names
+        self.mean = mean
+        self.std = std
+    def __call__(self, chunk):
+        for tensor_name in self.tensor_names:
+            if tensor_name in chunk:
+                chunk[tensor_name] = (chunk[tensor_name]-self.mean)/self.std
 
 class Sigmoid(ChunkProcessor):
     def __call__(self, chunk):
