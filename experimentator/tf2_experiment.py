@@ -1,7 +1,7 @@
 import os
 import glob
-import numpy as np
 import logging
+import numpy as np
 import tensorflow as tf
 from tensorflow.python.client import timeline # pylint: disable=no-name-in-module, unused-import
 from .base_experiment import BaseExperiment, lazyproperty, ExperimentMode
@@ -9,8 +9,12 @@ from .callbacked_experiment import Callback
 
 #os.environ['AUTOGRAPH_VERBOSITY'] = "5"
 #tf.config.set_soft_device_placement(False)
-for device in tf.config.list_physical_devices('GPU'):
-    tf.config.experimental.set_memory_growth(device, enable=True)
+try:
+    for device in tf.config.list_physical_devices('GPU'):
+        tf.config.experimental.set_memory_growth(device, enable=True)
+except RuntimeError:
+    print("Physical devices already initialized. Impossible to set memory growth.", file=os.sys.stderr)
+    pass
 
 def print_tensor(x, message=None):
     def print_function(x):
@@ -148,7 +152,23 @@ class TensorflowExperiment(BaseExperiment):
 
 
 
-
+class EpochExponentialMovingAverage(Callback):
+    """ 'decay' is highly dependant on the dataset size, dataset homogenity and batch size.
+    """
+    precedence = 0 # very first
+    def __init__(self, decay):
+        self.decay = decay
+    def init(self, exp):
+        self.train_model = exp.train_model
+    def on_epoch_begin(self, **_):
+        self.ema = tf.train.ExponentialMovingAverage(decay=self.decay)
+    def on_batch_end(self, cycle_type, **_):
+        if cycle_type == "TRAIN":
+            self.ema.apply(self.train_model.trainable_variables)
+    def on_epoch_end(self, **_):
+        for var in self.train_model.trainable_variables:
+            var.assign(self.ema.average(var))
+        self.ema = None
 
 class ProfileCallback(Callback):
     # def __init__(self, exp):
