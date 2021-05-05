@@ -98,14 +98,14 @@ class BaseExperiment(metaclass=abc.ABCMeta):
         elif subset.type == "TEST":
             return self.batch_eval(data)
 
-    def run_cycle(self, subset, mode: ExperimentMode, progress):
-        progress.set_description(subset.name)
+    def run_cycle(self, subset, mode: ExperimentMode, epoch_progress):
+        epoch_progress.set_description(subset.name)
         for keys, data in self.batch_generator(subset.shuffeled_keys): # pylint: disable=unused-variable
             _ = self.run_batch(subset=subset, mode=mode, data=data)
-            progress.update(1)
+            epoch_progress.update(1)
 
     def run_epoch(self, epoch):
-        progress = self.progress(None, total=self.batch_count, unit="batches")
+        epoch_progress = self.progress(None, total=self.batch_count, unit="batches")
         self.batch_count = 0  # required
         for subset_name, subset in self.subsets.items():
             assert subset.keys, "Empty subset is not allowed because it would require to adapt all callacks: {}".format(subset_name)
@@ -115,8 +115,8 @@ class BaseExperiment(metaclass=abc.ABCMeta):
                 mode = ExperimentMode.TRAIN
             else:
                 continue # skip this cycle for this epoch
-            self.run_cycle(subset=subset, mode=mode, progress=progress)
-        progress.close()
+            self.run_cycle(subset=subset, mode=mode, epoch_progress=epoch_progress)
+        epoch_progress.close()
 
     def train(self, epochs):
         range_epochs = range(self.epochs+1, epochs+1)

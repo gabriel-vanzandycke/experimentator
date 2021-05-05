@@ -30,18 +30,21 @@ class CallbackedExperiment(BaseExperiment): # pylint: disable=abstract-method
 
     def run_batch(self, mode, *args, **kwargs):
         self.state["batch"] = self.state["batch"] + 1
-        self.fire("batch_begin", mode)
+        self.fire("batch_begin", mode=mode)
         result = super().run_batch(mode=mode, *args, **kwargs)
         self.state.update(**{k:v for k,v in result.items() if k in list(self.metrics.keys())+["loss"]})
-        self.fire("batch_end", mode)
+        self.fire("batch_end", mode=mode)
         return result
 
     def run_cycle(self, subset, mode, *args, **kwargs):
-        self.state["subset"] = subset.name
+        self.state["cycle_name"] = subset.name
+        self.state["cycle_type"] = subset.type
         self.state["batch"] = 0
         self.fire("cycle_begin", mode=mode)
         super().run_cycle(subset=subset, mode=mode, *args, **kwargs)
         self.fire("cycle_end", mode=mode)
+        del self.state["cycle_name"]
+        del self.state["cycle_type"]
 
     def run_epoch(self, epoch, *args, **kwargs):
         self.state["epoch"] = epoch
@@ -51,7 +54,7 @@ class CallbackedExperiment(BaseExperiment): # pylint: disable=abstract-method
 
 
 class Callback():
-    precedence = 10
+    precedence = 20
     when = ExperimentMode.ALL
     events = ["epoch_begin", "cycle_begin", "batch_begin", "batch_end", "cycle_end", "epoch_end"]
     def fire(self, event, state):
@@ -66,7 +69,7 @@ class InitState(Callback):
     precedence = 0 # very first
     def on_epoch_begin(self, state, **_):
         for key in [k for k in state if k!= "epoch"]:
-            state[key] = np.nan
+            state[key] = np.nan # TODO: shouldn't we just delete key from state?
 
 class AccumulateBatchMetrics(Callback):
     def __init__(self, *args_metrics, **kwargs_metrics):
@@ -96,11 +99,12 @@ class AccumulateBatchMetrics(Callback):
                 # Record metric to state dictionary
                 state[output_name] = self.acc[output_name]
 
-
 class AverageLoss(Callback):
     def on_cycle_begin(self, **_):
         self.loss = []
     def on_batch_end(self, loss, **_):
+        if np.isnan(loss):
+            raise
         self.loss.append(loss)
     def on_cycle_end(self, state, **_):
         state["loss"] = np.mean(self.loss)
@@ -124,3 +128,11 @@ class MeasureTime(Callback):
     def on_epoch_end(self, state, **_):
         toc_epoch = time.time()
         state["epoch_time"] = toc_epoch - self.tic_epoch
+
+class LogLearningRate(Callback):
+    precedence = 0 # first
+    def init(self, exp):
+        self.optimizer = exp.optimizer
+    def on_epoch_end(self, state, **_):
+        state["learning_rate"] = self.optimizer.lr.numpy()
+

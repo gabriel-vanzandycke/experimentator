@@ -17,8 +17,8 @@ class LogStateNeptune(Callback):
         neptune.create_experiment(name=run_name, params=exp.cfg)
     def on_epoch_begin(self, **_):
         self.state = {}
-    def on_cycle_end(self, subset, state, **_):
-        self.state.update({subset + "_" + k: v for k,v in state.items()})
+    def on_cycle_end(self, cycle_name, state, **_):
+        self.state.update({cycle_name + "_" + k: v for k,v in state.items()})
     def on_epoch_end(self, **_):
         for key, value in self.state.items():
             try:

@@ -24,7 +24,7 @@ class SaveWeights(Callback):
 class LoggerCallback(Callback, metaclass=abc.ABCMeta):
     precedence = 100 # very last
     state = {}
-    def init(self, exp): # pylint: disable=super-init-not-called
+    def init(self, exp):
         self.project_name = exp.get("project_name", "unknown_project")
         self.run_name = json.dumps(exp.grid_sample)
         self.config = {k:str(v) for k,v in exp.cfg.items() if not isinstance(v, types.ModuleType)} # list and dictionnaries don't get printed correctly
@@ -34,8 +34,9 @@ class LoggerCallback(Callback, metaclass=abc.ABCMeta):
         self.config["group"] = grid_sample
     def on_epoch_begin(self, **_):
         self.state = {}
-    def on_cycle_end(self, subset, state, **_):
-        self.state.update({subset + "_" + k: v for k,v in state.items()})
+    def on_cycle_end(self, cycle_name, state, **_):
+        excluded_keys = ["cycle_name", "cycle_type", "batch", "epoch"]
+        self.state.update({cycle_name + "_" + k: v for k,v in state.items() if k not in excluded_keys})
     @abc.abstractmethod
     def on_epoch_end(self, **_):
         raise NotImplementedError()
@@ -43,13 +44,11 @@ class LoggerCallback(Callback, metaclass=abc.ABCMeta):
 class LogStateDataCollector(LoggerCallback):
     @lazyproperty
     def logger(self):
-        filename = os.path.join(self.config["folder"], "history.dcp")
+        filename = os.path.join(self.config.get("folder", "."), "history.dcp")
         return DataCollector(filename)
     def on_epoch_end(self, **_):
         self.logger.update(**self.state)
         self.logger.checkpoint()
-
-
 
 
 
