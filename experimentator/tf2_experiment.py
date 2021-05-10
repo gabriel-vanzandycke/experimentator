@@ -14,7 +14,6 @@ try:
         tf.config.experimental.set_memory_growth(device, enable=True)
 except RuntimeError:
     print("Physical devices already initialized. Impossible to set memory growth.", file=os.sys.stderr)
-    pass
 
 def print_tensor(x, message=None):
     def print_function(x):
@@ -170,15 +169,20 @@ class EpochExponentialMovingAverage(Callback):
             var.assign(self.ema.average(var))
         self.ema = None
 
+class TensorFlowProfilerExperiment(TensorflowExperiment):
+    def run_batch(self, subset, batch_id, *args, **kwargs):
+        with tf.profiler.experimental.Trace(subset.name, step_num=batch_id, _r=1):
+            result = super().run_batch(*args, subset=subset, batch_id=batch_id, **kwargs)
+        return result
+
 class ProfileCallback(Callback):
     # def __init__(self, exp):
     #     self.writer = tf.summary.create_file_writer("logdir")
     #     tf.debugging.experimental.enable_dump_debug_info("logdir", tensor_debug_mode="FULL_HEALTH", circular_buffer_size=-1)
     def on_epoch_begin(self, epoch, **_):
-        return
-        if epoch == 2:
+        if epoch == 0:
             tf.profiler.experimental.start("logdir")
-        if epoch == 4:
+        if epoch == 2:
             tf.profiler.experimental.stop()
     # def on_batch_begin(self, epoch, **_):
     #     if 2 <= epoch < 4:

@@ -1,11 +1,11 @@
 import abc
-import logging
-from tqdm.auto import tqdm
 from enum import Flag, auto
+import logging
 
+from tqdm.auto import tqdm
 from mlworkflow import SideRunner, lazyproperty, TransformedDataset, PickledDataset
-from .utils import find, RobustBatchesDataset
 
+from .utils import find, RobustBatchesDataset
 
 class ExperimentMode(Flag):
     NONE = 0
@@ -90,7 +90,8 @@ class BaseExperiment(metaclass=abc.ABCMeta):
     def batch_eval(self, *args, **kwargs):
         raise NotImplementedError("Should be implemented in the framework specific Experiment.")
 
-    def run_batch(self, subset, data, mode=ExperimentMode.ALL):
+    def run_batch(self, subset, batch_id, dataset, mode=ExperimentMode.ALL):
+        keys, data = next(dataset) # pylint: disable=unused-variable
         if subset.type == "TRAIN":
             return self.batch_train(data, mode)
         elif subset.type == "VALID":
@@ -100,9 +101,15 @@ class BaseExperiment(metaclass=abc.ABCMeta):
 
     def run_cycle(self, subset, mode: ExperimentMode, epoch_progress):
         epoch_progress.set_description(subset.name)
-        for keys, data in self.batch_generator(subset.shuffeled_keys): # pylint: disable=unused-variable
-            _ = self.run_batch(subset=subset, mode=mode, data=data)
-            epoch_progress.update(1)
+        dataset_generator = iter(self.batch_generator(subset.shuffeled_keys))
+        batch_id = 0
+        while True:
+            try:
+                _ = self.run_batch(subset=subset, batch_id=batch_id, dataset=dataset_generator, mode=mode)
+                epoch_progress.update(1)
+                batch_id += 1
+            except StopIteration:
+                break
 
     def run_epoch(self, epoch):
         epoch_progress = self.progress(None, total=self.batch_count, unit="batches")

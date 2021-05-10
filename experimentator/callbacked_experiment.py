@@ -15,6 +15,20 @@ from .base_experiment import BaseExperiment, ExperimentMode
 class FailedTrainingError(BaseException):
     pass
 
+
+class Callback():
+    after = []
+    before = []
+    when = ExperimentMode.ALL
+    events = ["epoch_begin", "cycle_begin", "batch_begin", "batch_end", "cycle_end", "epoch_end"]
+    def fire(self, event, state):
+        assert event in self.events, f"Unknown event: {event}. Existing events are {self.events}"
+        cb = getattr(self, "on_{}".format(event), None)
+        if cb:
+            cb(**state, state=state) # pylint: disable=not-callable
+    def __str__(self):
+        return self.__class__.__name__
+
 class CallbackedExperiment(BaseExperiment): # pylint: disable=abstract-method
     state = {}
     @lazyproperty
@@ -27,6 +41,7 @@ class CallbackedExperiment(BaseExperiment): # pylint: disable=abstract-method
         # Initialization of callbacks and constraint solver
         p = cst.Problem()
         for label, cb in callbacks.items():
+            assert isinstance(cb, Callback), f"Only instances of 'Callback' can be used. Recieved {cb} of type {type(cb)}"
             if getattr(cb, "init", None):
                 cb.init(exp=self)
             p.addVariable(label, range(len(callbacks)))
@@ -49,7 +64,7 @@ class CallbackedExperiment(BaseExperiment): # pylint: disable=abstract-method
     def fire(self, event, mode=ExperimentMode.ALL):
         for cb in self.callbacks:
             if cb.when & mode:
-                cb.fire(event, self.state)
+                cb.fire(event=event, state=self.state)
 
     @lazyproperty
     def metrics(self):
@@ -57,10 +72,10 @@ class CallbackedExperiment(BaseExperiment): # pylint: disable=abstract-method
         """
         return {}
 
-    def run_batch(self, mode, *args, **kwargs): # pylint: disable=signature-differs
-        self.state["batch"] = self.state["batch"] + 1
+    def run_batch(self, mode, batch_id, *args, **kwargs): # pylint: disable=signature-differs
+        self.state["batch"] = batch_id
         self.fire("batch_begin", mode=mode)
-        result = super().run_batch(mode=mode, *args, **kwargs)
+        result = super().run_batch(mode=mode, batch_id=batch_id, *args, **kwargs)
         self.state.update(**{k:v for k,v in result.items() if k in list(self.metrics.keys())+["loss"]})
         self.fire("batch_end", mode=mode)
         return result
@@ -81,18 +96,6 @@ class CallbackedExperiment(BaseExperiment): # pylint: disable=abstract-method
         super().run_epoch(epoch=epoch, *args, **kwargs)
         self.fire("epoch_end")
 
-class Callback():
-    after = []
-    before = []
-    when = ExperimentMode.ALL
-    events = ["epoch_begin", "cycle_begin", "batch_begin", "batch_end", "cycle_end", "epoch_end"]
-    def fire(self, event, state):
-        assert event in self.events, f"Unknown event: {event}. Available events are {self.events}"
-        cb = getattr(self, "on_{}".format(event), None)
-        if cb:
-            cb(**state, state=state) # pylint: disable=not-callable
-    def __str__(self):
-        return self.__class__.__name__
 
 class InitState(Callback):
     before = ["MeasureTime"]
