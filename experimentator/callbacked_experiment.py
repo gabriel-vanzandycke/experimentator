@@ -204,8 +204,6 @@ class SaveLearningRate(Callback):
     before = ["StateLogger"]
     def init(self, exp):
         self.optimizer = exp.optimizer
-    def on_batch_end(self, state, **_):
-        print(self.optimizer.lr.numpy())
     def on_epoch_end(self, state, **_):
         state["learning_rate"] = self.optimizer.lr.numpy()
 
