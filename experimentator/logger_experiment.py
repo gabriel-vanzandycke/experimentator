@@ -7,50 +7,6 @@ from .callbacked_experiment import Callback
 from .utils import DataCollector
 
 
-class SaveWeights(Callback):
-    precedence = 100
-    min_loss = None
-    def __init__(self, strategy="best"):
-        self.strategy = strategy
-    def init(self, exp):
-        self.exp = exp
-    def on_epoch_end(self, loss, epoch, **_):
-        if     (self.strategy == "best" and (self.min_loss is None or loss < self.min_loss)) \
-            or (self.strategy == "all"):
-            self.min_loss = loss
-            self.exp.save_weights(f"{self.exp.folder}/{epoch:04d}{self.exp.weights_suffix}")
-
-
-class LoggerCallback(Callback, metaclass=abc.ABCMeta):
-    precedence = 100 # very last
-    state = {}
-    def init(self, exp):
-        self.project_name = exp.get("project_name", "unknown_project")
-        self.run_name = json.dumps(exp.grid_sample)
-        self.config = {k:str(v) for k,v in exp.cfg.items() if not isinstance(v, types.ModuleType)} # list and dictionnaries don't get printed correctly
-
-        grid_sample = dict(exp.grid_sample) # copies the original dictionary
-        grid_sample.pop("fold", None)       # removes 'fold' to be able to group runs
-        self.config["group"] = grid_sample
-    def on_epoch_begin(self, **_):
-        self.state = {}
-    def on_cycle_end(self, cycle_name, state, **_):
-        excluded_keys = ["cycle_name", "cycle_type", "batch", "epoch"]
-        self.state.update({cycle_name + "_" + k: v for k,v in state.items() if k not in excluded_keys})
-    @abc.abstractmethod
-    def on_epoch_end(self, **_):
-        raise NotImplementedError()
-
-class LogStateDataCollector(LoggerCallback):
-    @lazyproperty
-    def logger(self):
-        filename = os.path.join(self.config.get("folder", "."), "history.dcp")
-        return DataCollector(filename)
-    def on_epoch_end(self, **_):
-        self.logger.update(**self.state)
-        self.logger.checkpoint()
-
-
 
 
 

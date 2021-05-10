@@ -2,11 +2,11 @@ import os
 import pandas
 from mlworkflow import lazyproperty
 import wandb
-from .logger_experiment import LoggerCallback
+from experimentator import StateLogger
 
 os.environ["WANDB_SILENT"] = "true"
 
-class LogStateWandB(LoggerCallback):
+class LogStateWandB(StateLogger):
     best_report = {}
     def __init__(self, criterion_metric=None):
         self.criterion_metric = criterion_metric
@@ -22,13 +22,14 @@ class LogStateWandB(LoggerCallback):
         return wandb
     def __del__(self):
         self.wandb.finish()
-    def on_epoch_end(self, **_):
+    def on_epoch_end(self, state, **_):
         report = {}
-        for key, data in self.state.items():
-            if isinstance(data, pandas.DataFrame):
-                report[key] = self.wandb.Table(dataframe=data)
-            else:
-                report[key] = data
+        for key, data in state.items():
+            if key not in self.excluded_keys:
+                if isinstance(data, pandas.DataFrame):
+                    report[key] = self.wandb.Table(dataframe=data)
+                else:
+                    report[key] = data
         self.wandb.log(report) # log *once* per epoch
 
         if self.criterion_metric and self.criterion_metric in report:
