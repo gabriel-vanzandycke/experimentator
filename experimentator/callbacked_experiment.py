@@ -19,24 +19,28 @@ class CallbackedExperiment(BaseExperiment): # pylint: disable=abstract-method
     state = {}
     @lazyproperty
     def callbacks(self):
+        # Indexing callbacks with labels in ["A", "B", "C", ...]
         callbacks = {chr(ord("A")+idx): cb for idx, cb in enumerate(self.cfg["callbacks"]) if cb is not None}
         if not callbacks:
             return []
 
+        # Initialization of callbacks and constraint solver
         p = cst.Problem()
         for label, cb in callbacks.items():
             if getattr(cb, "init", None):
                 cb.init(exp=self)
             p.addVariable(label, range(len(callbacks)))
 
+        # Definition of constraints
         for label, other in itertools.permutations(callbacks, 2):
-            for after in callbacks[label].after:
-                if after in [cb.__name__ for cb in callbacks[other].__class__.__mro__]:
+            for a in callbacks[label].after:
+                if a in [cb.__name__ for cb in callbacks[other].__class__.__mro__]: # Check if label is in other's mro
                     p.addConstraint(lambda x, y: x > y, [label, other])
-            for before in callbacks[label].before:
-                if before in [c.__name__ for c in callbacks[other].__class__.__mro__]:
+            for b in callbacks[label].before:
+                if b in [cb.__name__ for cb in callbacks[other].__class__.__mro__]: # Check if label is in other's mro
                     p.addConstraint(lambda x, y: x < y, [label, other])
 
+        # Returns callback sorted by precedence computed with the solver
         solution = p.getSolution()
         if not solution:
             raise BaseException("Impossible to solve")
@@ -86,7 +90,6 @@ class Callback():
         assert event in self.events, f"Unknown event: {event}. Available events are {self.events}"
         cb = getattr(self, "on_{}".format(event), None)
         if cb:
-            print(self.__class__.__name__, state.keys())
             cb(**state, state=state) # pylint: disable=not-callable
     def __str__(self):
         return self.__class__.__name__
@@ -169,7 +172,7 @@ class AccumulateBatchMetrics(Callback):
 class GatherCycleMetrics(Callback):
     after = ["AccumulateBatchMetrics"]
     before = ["SaveLearningRate", "StateLogger"]
-    excluded_keys = ["cycle_name", "cycle_type"]
+    excluded_keys = ["cycle_name", "cycle_type", "epoch"]
     def on_cycle_end(self, cycle_name, state, **_):
         for key in list(state.keys()):
             if key not in self.excluded_keys:
