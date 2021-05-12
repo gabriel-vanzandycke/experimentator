@@ -27,6 +27,9 @@ class TensorflowExperiment(BaseExperiment):
     run_options = None  # overwritten by callbacks
     run_metadata = None # overwritten by callbacks
     weights_suffix = "_weights"
+    # def __init__(self, *args, **kwargs):
+    #     tf.keras.backend.clear_session()
+    #     super().__init__(*args, **kwargs)
 
     @lazyproperty
     def metrics(self):
@@ -153,8 +156,8 @@ class TensorflowExperiment(BaseExperiment):
 
 class EpochExponentialMovingAverage(Callback):
     """ 'decay' is highly dependant on the dataset size, dataset homogenity and batch size.
+        /!\  tf_decay = 1 - torch_decay
     """
-    precedence = 0 # very first
     def __init__(self, decay):
         self.decay = decay
     def init(self, exp):
@@ -176,13 +179,18 @@ class TensorFlowProfilerExperiment(TensorflowExperiment):
         return result
 
 class ProfileCallback(Callback):
+    def __init__(self, batch_start=1, batch_stop=2, mode=ExperimentMode.ALL):
+        self.batch_start = batch_start
+        self.batch_stop = batch_stop
+        self.mode = mode
     # def __init__(self, exp):
     #     self.writer = tf.summary.create_file_writer("logdir")
     #     tf.debugging.experimental.enable_dump_debug_info("logdir", tensor_debug_mode="FULL_HEALTH", circular_buffer_size=-1)
-    def on_epoch_begin(self, epoch, **_):
-        if epoch == 0:
+    def on_batch_begin(self, mode, epoch, batch, **_):
+        if self.batch_start <= batch < self.batch_stop and mode & self.mode:
             tf.profiler.experimental.start("logdir")
-        if epoch == 2:
+    def on_batch_end(self, mode, batch, **_):
+        if self.batch_start <= batch < self.batch_stop and mode & self.mode:
             tf.profiler.experimental.stop()
     # def on_batch_begin(self, epoch, **_):
     #     if 2 <= epoch < 4:

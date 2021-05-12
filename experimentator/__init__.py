@@ -2,8 +2,8 @@ import utils
 from .base_experiment import BaseExperiment, AsyncExperiment, DummyExperiment, ExperimentMode
 from .keys_splitter import KeysSplitter, Subset
 from .manager import ExperimentManager#, ExperimentManagerNotebook
-from .callbacked_experiment import Callback, CallbackedExperiment, InitState, MeasureTime, AverageLoss, AccumulateBatchMetrics, \
-    SaveLearningRate,  SaveWeights, StateLogger, LogStateDataCollector, GatherCycleMetrics
+from .callbacked_experiment import Callback, CallbackedExperiment, InitState, MeasureTime, StopFailedTraining, \
+    AccumulateBatchMetrics, SaveLearningRate,  SaveWeights, StateLogger, LogStateDataCollector, GatherCycleMetrics, AverageMetrics
 from .wandb_experiment import LogStateWandB
 from .tf2_experiment import TensorflowExperiment, TensorFlowProfilerExperiment, ProfileCallback
 from .tf2_chunk_processors import ChunkProcessor
