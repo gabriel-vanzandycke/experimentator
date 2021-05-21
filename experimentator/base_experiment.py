@@ -127,7 +127,7 @@ class BaseExperiment(metaclass=abc.ABCMeta):
         epoch_progress.close()
 
     def train(self, epochs):
-        range_epochs = range(self.epochs+1, epochs+1)
+        range_epochs = range(self.epochs, epochs)
         for epoch in self.progress(range_epochs, desc="epochs"):
             self.run_epoch(epoch=epoch)
 
