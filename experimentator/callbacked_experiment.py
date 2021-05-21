@@ -1,6 +1,7 @@
 import abc
 import itertools
 import json
+import logging
 import os
 import re
 import time
@@ -12,6 +13,8 @@ from mlworkflow import lazyproperty
 
 from .utils import DataCollector
 from .base_experiment import BaseExperiment, ExperimentMode
+
+# pylint: disable=logging-fstring-interpolation
 
 class FailedTrainingError(BaseException):
     pass
@@ -65,7 +68,12 @@ class CallbackedExperiment(BaseExperiment): # pylint: disable=abstract-method
     def fire(self, event, mode=ExperimentMode.ALL):
         for cb in self.callbacks:
             if cb.when & mode:
-                cb.fire(event=event, state=self.state)
+                try:
+                    cb.fire(event=event, state=self.state)
+                except:
+                    logging.error(f"Error calling '{event}' on {cb} with state {list(self.state.keys())}")
+                    logging.error(f"Callback list: [{[cb.__class__.__name__ for cb in self.callbacks]}]")
+                    raise
 
     @lazyproperty
     def metrics(self):
@@ -172,7 +180,7 @@ class AverageMetrics(Callback):
                     break
 
 class StopFailedTraining(Callback):
-    after = ["AccumulateBatchMetrics"]
+    before = ["AccumulateBatchMetrics"]
     interrupt_scheduled = False
     def on_cycle_begin(self, **_):
         if self.interrupt_scheduled:
