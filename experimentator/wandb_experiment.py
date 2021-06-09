@@ -16,7 +16,7 @@ class LogStateWandB(StateLogger):
             project=self.project_name,
             reinit=True,
             config=self.config,
-            settings=wandb.Settings(show_emoji=False, show_info=False, show_warnings=False)
+            settings=wandb.Settings(show_emoji=False)
         )
         wandb.run.name = self.run_name
         return wandb
