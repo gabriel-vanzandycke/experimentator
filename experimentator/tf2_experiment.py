@@ -23,6 +23,18 @@ def print_tensor(x, message=None):
         return x
     return tf.keras.layers.Lambda(print_function)(x)
 
+class TensorFlowModelWrapper(tf.keras.Model): # pylint: disable=abstract-method
+    @tf.function
+    def train_step(self, inputs):
+        with tf.GradientTape() as tape:
+            results = self(inputs, training=True)
+        grads = tape.gradient(results["loss"], self.trainable_weights)
+        self.optimizer.apply_gradients(zip(grads, self.trainable_weights))
+        return results
+    @tf.function
+    def test_step(self, inputs):
+        return self(inputs, training=False)
+
 class TensorflowExperiment(BaseExperiment):
     run_options = None  # overwritten by callbacks
     run_metadata = None # overwritten by callbacks
@@ -30,6 +42,7 @@ class TensorflowExperiment(BaseExperiment):
     # def __init__(self, *args, **kwargs):
     #     tf.keras.backend.clear_session()
     #     super().__init__(*args, **kwargs)
+    #     print(f"clearing session for {self.grid_sample}")
 
     @lazyproperty
     def metrics(self):
@@ -60,6 +73,12 @@ class TensorflowExperiment(BaseExperiment):
 
     def save_weights(self, filename):
         self.train_model.save_weights(filename)
+
+    def get_learning_rate(self):
+        return self.optimizer.lr.numpy()
+
+    def set_learning_rate(self, learning_rate):
+        self.optimizer.lr = learning_rate
 
     # @lazyproperty
     # def checkpoint(self):
@@ -112,29 +131,50 @@ class TensorflowExperiment(BaseExperiment):
 
     @lazyproperty
     def train_model(self):
-        return tf.keras.Model(self.inputs, {"loss": self.chunk["loss"]})
+        model = TensorFlowModelWrapper(self.inputs, {"loss": self.chunk["loss"]})
+        model.compile(optimizer=self.optimizer)
+        return model
 
     @lazyproperty
     def eval_model(self):
-        return tf.keras.Model(self.inputs, {"loss": self.chunk["loss"], **self.metrics, **self.outputs})
+        model = TensorFlowModelWrapper(self.inputs, {"loss": self.chunk["loss"], **self.metrics, **self.outputs})
+        model.compile(optimizer=self.optimizer)
+        return model
 
     @lazyproperty
     def infer_model(self):
-        return tf.keras.Model(self.inputs, self.outputs)
+        model = TensorFlowModelWrapper(self.inputs, self.outputs)
+        model.compile()
+        return model
 
-    @staticmethod
-    @tf.function
-    def _train_step(inputs, model, optimizer):
-        with tf.GradientTape() as tape:
-            results = model(inputs, training=True)
-        grads = tape.gradient(results["loss"], model.trainable_weights)
-        optimizer.apply_gradients(zip(grads, model.trainable_weights))
-        return results
+    # === START ===
+    # @tf.function
+    # def _batch_train(self, inputs):
+    #     with tf.GradientTape() as tape:
+    #         results = self.train_model(inputs, training=True)
+    #     grads = tape.gradient(results["loss"], self.train_model.trainable_weights)
+    #     self.optimizer.apply_gradients(zip(grads, self.train_model.trainable_weights))
+    #     return results
 
-    @staticmethod
-    @tf.function
-    def _eval_step(inputs, model):
-        return model(inputs, training=False)
+    # def batch_train(self, data, mode=None):
+    #     self.__init_inputs(data)
+    #     _ = self.train_model # forces lazyproperties to be created as attributes before wrapping with tf.function decorator
+    #     return self._batch_train(self.select_data(data))
+    # === STOP ===
+
+    # @staticmethod
+    # @tf.function
+    # def _train_step(inputs, model, optimizer):
+    #     with tf.GradientTape() as tape:
+    #         results = model(inputs, training=True)
+    #     grads = tape.gradient(results["loss"], model.trainable_weights)
+    #     optimizer.apply_gradients(zip(grads, model.trainable_weights))
+    #     return results
+
+    # @staticmethod
+    # @tf.function
+    # def _eval_step(inputs, model):
+    #     return model(inputs, training=False)
 
     def select_data(self, data):
         return {k:v for k,v in data.items() if k in self.inputs}
@@ -142,15 +182,15 @@ class TensorflowExperiment(BaseExperiment):
     def batch_train(self, data, mode=ExperimentMode.TRAIN):
         self.__init_inputs(data)
         model = self.train_model if mode & ExperimentMode.TRAIN else self.eval_model
-        return self._train_step(self.select_data(data), model, self.optimizer)
+        return model.train_step(self.select_data(data))
 
     def batch_eval(self, data):
         self.__init_inputs(data)
-        return self._eval_step(self.select_data(data), self.eval_model)
+        return self.eval_model.test_step(self.select_data(data))
 
     def batch_infer(self, data):
         self.__init_inputs(data)
-        return self._eval_step(self.select_data(data), self.infer_model)
+        return self.infer_model.test_step(self.select_data(data))
 
 
 
