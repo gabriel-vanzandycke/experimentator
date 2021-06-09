@@ -66,14 +66,18 @@ class CallbackedExperiment(BaseExperiment): # pylint: disable=abstract-method
         return [callbacks[label] for label, precedence in sorted(solution.items(), key=lambda kv: kv[1])]
 
     def fire(self, event, mode=ExperimentMode.ALL):
-        for cb in self.callbacks:
-            if cb.when & mode:
-                try:
+        cb_messages = []
+        try:
+            for cb in self.callbacks:
+                if cb.when & mode:
+                    cb_messages.append(f"{cb}({list(self.state.keys())})")
                     cb.fire(event=event, state=self.state)
-                except:
-                    logging.error(f"Error calling '{event}' on {cb} with state {list(self.state.keys())}")
-                    logging.error(f"Callback list: [{[cb.__class__.__name__ for cb in self.callbacks]}]")
-                    raise
+        except FailedTrainingError:
+            raise
+        except:
+            cb_messages = "\n    ".join(cb_messages)
+            logging.error(f"Error calling '{event}' after:\n    {cb_messages}")
+            raise
 
     @lazyproperty
     def metrics(self):
@@ -153,7 +157,10 @@ class LogStateDataCollector(StateLogger):
         self.logger.checkpoint()
 
 class AccumulateBatchMetrics(Callback):
-    when = ExperimentMode.EVAL
+    """ Removes metrics output by the model and accumulate them after each batch.
+        When cycle ends, restore the accumulated value in state.
+    """
+    #when = ExperimentMode.EVAL
     after = ["InitState"]
     def init(self, exp):
         self.metrics = list(exp.metrics.keys()) + ["loss"]
@@ -227,7 +234,61 @@ class SaveLearningRate(Callback):
     after = ["GatherCycleMetrics"]
     before = ["StateLogger"]
     def init(self, exp):
-        self.optimizer = exp.optimizer
+        self.learning_rate_getter = exp.get_learning_rate
     def on_epoch_end(self, state, **_):
-        state["learning_rate"] = self.optimizer.lr.numpy()
+        state["learning_rate"] = self.learning_rate_getter()
 
+class LearningRateDecay(Callback):
+    def __init__(self, start, duration=1, factor=10):
+        # start and duration are expressed in epochs here
+        self.start = start if isinstance(start, list) else [start]
+        self.duration = duration if isinstance(duration, list) else [duration]
+        self.factor = factor if isinstance(factor, list) else [factor]
+        assert len(self.start) == len(self.duration) == len(self.factor)
+    def init(self, exp):
+        self.learning_rate_setter = exp.set_learning_rate
+        self.learning_rate_getter = exp.get_learning_rate
+        self.learning_rate = exp.get_learning_rate()
+        self.batch_count = sum([len(subset.keys)//exp.batch_size for _, subset in exp.subsets.items() if subset.type == "TRAIN"])
+        # adjust start and duration per step
+        print(self.start)
+        self.start = [s*self.batch_count for s in self.start]
+        self.duration = [d*self.batch_count for d in self.duration]
+        print(self.start)
+    def compute_factor(self, step):
+        step_factor = 1.0
+        for start, duration, factor in zip(self.start, self.duration, self.factor):
+            if step >= start+duration: # after decay period
+                step_factor *= factor
+            elif start < step < start+duration: # during decay period
+                step_factor *= factor ** ((step - start)/duration)
+        return step_factor
+    def on_batch_begin(self, cycle_type, epoch, batch, **_):
+        if cycle_type == "TRAIN":
+            self.learning_rate_setter(self.learning_rate * self.compute_factor(step=epoch*self.batch_count + batch))
+
+class LearningRateWarmUp(Callback):
+    # TODO: check tf.keras.optimizers.schedules.LearningRateSchedule
+    def __init__(self, start=0, duration=2, factor=0.001):#, warm_restart_schedule=None, warm_restart_duration=0.5):
+        # start and duration are expressed in epochs here
+        self.start = start
+        self.duration = duration
+        self.factor = factor
+    def init(self, exp):
+        self.learning_rate_setter = exp.set_learning_rate
+        self.learning_rate_getter = exp.get_learning_rate
+        self.learning_rate = exp.get_learning_rate()
+        self.batch_count = sum([len(subset.keys)//exp.batch_size for _, subset in exp.subsets.items() if subset.type == "TRAIN"])
+        # adjust start and duration per step
+        self.start *= self.batch_count
+        self.duration *= self.batch_count
+    def compute_factor(self, step):
+        step_factor = 1.0
+        if step <= self.start:
+            step_factor *= self.factor
+        elif self.start < step < self.start+self.duration:
+            step_factor *= self.factor ** (1.0 - (step - self.start)/self.duration)
+        return step_factor
+    def on_batch_begin(self, cycle_type, epoch, batch, **_):
+        if cycle_type == "TRAIN":
+            self.learning_rate_setter(self.learning_rate * self.compute_factor(step=epoch*self.batch_count + batch))
