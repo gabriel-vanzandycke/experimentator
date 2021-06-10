@@ -240,7 +240,7 @@ class SaveLearningRate(Callback):
 
 class LearningRateDecay(Callback):
     # incompatible with a LearningRateWarmUp callback
-    def __init__(self, start, duration=1, factor=10):
+    def __init__(self, start, duration=1, factor=0.1):
         # start and duration are expressed in epochs here
         self.start = start if isinstance(start, list) else [start]
         self.duration = duration if isinstance(duration, list) else [duration]
