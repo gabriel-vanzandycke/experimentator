@@ -5,15 +5,17 @@ import datetime
 from enum import Enum
 import itertools
 import logging
+import multiprocessing
 import os
 import time
 import threading
 
 import astunparse
 from mlworkflow import SideRunner, lazyproperty
+from experimentator import DummyExperiment
 from .utils import find, mkdir
-
-# pylint: disable=logging-fstring-interpolation
+from .callbacked_experiment import FailedTrainingError
+# pylint: disable=logging-fstring-interpolation, logging-format-interpolation
 
 def product_kwargs(**kwargs):
     try:
@@ -48,14 +50,15 @@ class JobStatus(Enum):
     DONE = 3
 
 class Job():
-    def __init__(self, filename, config_tree, grid_sample=None):
+    def __init__(self, filename, config_tree, dummy=False, grid_sample=None):
         self.filename = filename
+        self.dummy = dummy
         self.config_tree = config_tree
         self.grid_sample = grid_sample or {}
         self.status = JobStatus.TODO
 
     def update_ast(self, **kwargs):
-        return update_ast(self.config_tree, dict(kwargs)) # dict makes a copy
+        return update_ast(self.config_tree, dict(kwargs)) # dict() makes a copy
 
     @property
     def config_str(self):
@@ -69,6 +72,8 @@ class Job():
 
     @lazyproperty
     def exp(self):
+        if self.dummy:
+            self.config["experiment_type"].append(DummyExperiment)
         return type("Exp", tuple(self.config["experiment_type"][::-1]), {})(self.config)
 
     @staticmethod
@@ -79,31 +84,37 @@ class Job():
         threading.current_thread().name = str(worker_id)
         return worker_id
 
-    def run(self, epochs, keep=True, **runtime_cfg):
+    def run(self, epochs, keep=True, **runtime_cfg): # gpu_index=None,
+        # if gpu_index is not None:
+        #     print(os.environ["CUDA_VISIBLE_DEVICES"])
+        #     raise
         project_name = os.path.splitext(os.path.basename(self.filename))[0]
         experiment_id = datetime.datetime.now().strftime("%Y%m%d_%H%M%S.%f")
         worker_id = self._get_worker_id(runtime_cfg.pop("worker_ids", None))
 
         # Update config tree with runtime config
-        unoverwritten = self.update_ast(**runtime_cfg)
+        unoverwritten = self.update_ast(**runtime_cfg, epochs=epochs)
         if unoverwritten:
             logging.warning("Un-overwritten runtime kwargs: {}".format(list(unoverwritten.keys())))
 
         # Write config string to file
-        folder = os.path.join(project_name, experiment_id)
+        folder = os.path.join(os.getenv("RESULTS_FOLDER", "."), project_name, experiment_id)
         mkdir(folder)
         filename = os.path.join(folder, "config.py")
         with open(filename, "w") as f:
             f.write(self.config_str)
 
         # Add run and project names
-        self.config.update(project_name=project_name, experiment_id=experiment_id, worker_id=worker_id, folder=folder)
+        self.config.update(project_name=project_name, experiment_id=experiment_id, worker_id=worker_id, folder=folder, dummy=dummy)
 
         # Launch training
         try:
             self.status = JobStatus.BUSY
-            self.exp.logger.info(f"{project_name}[{experiment_id}] doing {self.grid_sample}")
+            self.exp.logger.info(f"{project_name}.{experiment_id} doing {self.grid_sample}")
             self.exp.train(epochs=epochs)
+        except FailedTrainingError as e:
+            self.status = JobStatus.FAIL
+            self.exp.logger.warning(f"{project_name}.{experiment_id} failed with NaNs")
         except BaseException as e:
             self.status = JobStatus.FAIL
             self.exp.logger.exception(f"{project_name}.{experiment_id} failed")
@@ -117,7 +128,7 @@ class Job():
             del self.exp
 
 class ExperimentManager():
-    def __init__(self, filename, logfile=None, num_workers=0, **grid_search):
+    def __init__(self, filename, logfile=None, num_workers=0, dummy=False, **grid_search):
         self.logger = logging.getLogger("experimentator")
         if logfile:
             handler = logging.FileHandler(logfile, mode="w")
@@ -129,17 +140,14 @@ class ExperimentManager():
         self.side_runner = SideRunner(thread_count=num_workers) if num_workers > 0 else None
 
         with open(find(filename)) as f:
-            try:
-                tree = ast.parse(f.read())
-            except SyntaxError as e:
-                raise e
+            tree = ast.parse(f.read())
 
         if not grid_search:
             self.jobs = [Job(filename, config_tree=tree)]
         else:
             self.jobs = []
             for grid_sample in product_kwargs(**grid_search):
-                job = Job(filename, config_tree=copy.deepcopy(tree), grid_sample=grid_sample)
+                job = Job(filename, config_tree=copy.deepcopy(tree), dummy=dummy, grid_sample=grid_sample)
                 unoverwritten = job.update_ast(**grid_sample) # dict makes a copy
                 self.jobs.append(job)
             if unoverwritten:
@@ -161,6 +169,9 @@ class ExperimentManager():
                 if self.side_runner:
                     self.side_runner.run_async(Job.run, job, epochs=epochs, keep=False, worker_ids=self.worker_ids, **runtime_cfg)
                 else:
+                    #p = multiprocessing.Process(target=job.run, args=(epochs, False), kwargs=runtime_cfg)
+                    #p.start()
+                    #p.join()
                     job.run(epochs=epochs, keep=False, **runtime_cfg) # pylint: disable=expression-not-assigned
         if self.side_runner:
             self.side_runner.collect_runs()
@@ -173,7 +184,11 @@ def main():
     parser.add_argument("--workers", type=int, default=0)
     parser.add_argument('--grid', nargs="*")
     parser.add_argument('--kwargs', nargs="*", action='append')
+    parser.add_argument('--dummy', default=False, action='store_true')
     args = parser.parse_args()
+
+    # TODO: to be protected inside the if __name__ == '__main__' clause of the main module.
+    #multiprocessing.set_start_method("spawn")
 
     grid = {}
     for arg in args.grid or []:
@@ -183,7 +198,7 @@ def main():
     for kwarg in [kwarg for kwargs in args.kwargs or [[]] for kwarg in kwargs]: # Flattened appended kwargs
         exec(kwarg, None, kwargs) # pylint: disable=exec-used
 
-    manager = ExperimentManager(args.filename, logfile=args.logfile, **grid)
+    manager = ExperimentManager(args.filename, logfile=args.logfile, dummy=args.dummy, **grid)
     manager.execute(args.epochs, **kwargs)
 
 

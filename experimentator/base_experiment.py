@@ -90,7 +90,7 @@ class BaseExperiment(metaclass=abc.ABCMeta):
     def batch_eval(self, *args, **kwargs):
         raise NotImplementedError("Should be implemented in the framework specific Experiment.")
 
-    def run_batch(self, subset, batch_id, dataset, mode=ExperimentMode.ALL):
+    def run_batch(self, subset, batch_id, dataset, mode=ExperimentMode.ALL): # pylint: disable=unused-argument
         keys, data = next(dataset) # pylint: disable=unused-variable
         if subset.type == "TRAIN":
             return self.batch_train(data, mode)
@@ -116,7 +116,7 @@ class BaseExperiment(metaclass=abc.ABCMeta):
         self.batch_count = 0  # required
         for subset_name, subset in self.subsets.items():
             assert subset.keys, "Empty subset is not allowed because it would require to adapt all callacks: {}".format(subset_name)
-            eval_frequency = self.cfg.get("eval_frequency", 10)
+            eval_frequency = self.cfg.get("eval_frequency", 1)
             if eval_frequency and (epoch % eval_frequency) == 0:
                 mode = ExperimentMode.EVAL
             elif subset.type == 'TRAIN':

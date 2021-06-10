@@ -84,11 +84,10 @@ def find(filename, dirs=None, verbose=True):
             raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), filename)
         return filename
 
-    if dirs is None:
-        dirs = os.environ['WATCHED_DIRECTORIES'].split(
-            ":") if 'WATCHED_DIRECTORIES' in os.environ else []
-    dirs = [os.getcwd()] + dirs
+    dirs = dirs or [os.getcwd(), *[os.getenv(name) for name in ['SCRATCH_FOLDER', 'DATASET_FOLDER', 'RESULTS_FOLDER']]]
     for path in dirs:
+        if path is None:
+            continue
         filepath = os.path.join(path, filename)
         if os.path.isfile(filepath):
             if verbose:

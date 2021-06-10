@@ -11,8 +11,8 @@ import constraint as cst
 import numpy as np
 from mlworkflow import lazyproperty
 
-from .utils import DataCollector
-from .base_experiment import BaseExperiment, ExperimentMode
+from experimentator.utils import DataCollector
+from experimentator import BaseExperiment, ExperimentMode
 
 # pylint: disable=logging-fstring-interpolation
 
@@ -239,22 +239,21 @@ class SaveLearningRate(Callback):
         state["learning_rate"] = self.learning_rate_getter()
 
 class LearningRateDecay(Callback):
+    # incompatible with a LearningRateWarmUp callback
     def __init__(self, start, duration=1, factor=10):
         # start and duration are expressed in epochs here
         self.start = start if isinstance(start, list) else [start]
         self.duration = duration if isinstance(duration, list) else [duration]
         self.factor = factor if isinstance(factor, list) else [factor]
-        assert len(self.start) == len(self.duration) == len(self.factor)
+        assert len(self.start) == len(self.duration) == len(self.factor), print(self.start, self.duration, self.factor)
     def init(self, exp):
         self.learning_rate_setter = exp.set_learning_rate
         self.learning_rate_getter = exp.get_learning_rate
         self.learning_rate = exp.get_learning_rate()
         self.batch_count = sum([len(subset.keys)//exp.batch_size for _, subset in exp.subsets.items() if subset.type == "TRAIN"])
         # adjust start and duration per step
-        print(self.start)
         self.start = [s*self.batch_count for s in self.start]
         self.duration = [d*self.batch_count for d in self.duration]
-        print(self.start)
     def compute_factor(self, step):
         step_factor = 1.0
         for start, duration, factor in zip(self.start, self.duration, self.factor):
@@ -268,6 +267,7 @@ class LearningRateDecay(Callback):
             self.learning_rate_setter(self.learning_rate * self.compute_factor(step=epoch*self.batch_count + batch))
 
 class LearningRateWarmUp(Callback):
+    # incompatible with a LearningRateDecay callback
     # TODO: check tf.keras.optimizers.schedules.LearningRateSchedule
     def __init__(self, start=0, duration=2, factor=0.001):#, warm_restart_schedule=None, warm_restart_duration=0.5):
         # start and duration are expressed in epochs here

@@ -1,3 +1,7 @@
+import os
+# pylint: disable=wrong-import-position
+os.environ["TF_CPP_MIN_LOG_LEVEL"]="2"
+
 import utils
 from .base_experiment import BaseExperiment, AsyncExperiment, DummyExperiment, ExperimentMode
 from .keys_splitter import KeysSplitter, Subset
