@@ -105,7 +105,7 @@ class Job():
             f.write(self.config_str)
 
         # Add run and project names
-        self.config.update(project_name=project_name, experiment_id=experiment_id, worker_id=worker_id, folder=folder, dummy=dummy)
+        self.config.update(project_name=project_name, experiment_id=experiment_id, worker_id=worker_id, folder=folder, dummy=self.dummy)
 
         # Launch training
         try:
