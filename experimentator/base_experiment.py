@@ -64,8 +64,9 @@ class BaseExperiment(metaclass=abc.ABCMeta):
 
     @lazyproperty
     def subsets(self):
-        keys_splitter = self.cfg["keys_splitter"]
-        return keys_splitter(self.dataset.keys, fold=self.get("fold", default=0))
+        subsets = self.cfg["keys_splitter"](self.dataset.keys, fold=self.get("fold", default=0))
+        self.cfg["subsets_sizes"] = {subset_name: len(subset.keys) for subset_name, subset in subsets.items()}
+        return subsets
 
     def progress(self, generator, **kwargs):
         return tqdm(generator, **kwargs, disable=self.get("hide_progress", False), leave=False)
