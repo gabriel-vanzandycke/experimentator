@@ -35,10 +35,10 @@ class Callback():
 
 class CallbackedExperiment(BaseExperiment): # pylint: disable=abstract-method
     state = {}
-    @lazyproperty
-    def callbacks(self):
+    @staticmethod
+    def sort_callbacks(callbacks):
         # Indexing callbacks with labels in ["A", "B", "C", ...]
-        callbacks = {chr(ord("A")+idx): cb for idx, cb in enumerate(self.cfg["callbacks"]) if cb is not None}
+        callbacks = {chr(ord("A")+idx): cb for idx, cb in enumerate(callbacks) if cb is not None}
         if not callbacks:
             return []
 
@@ -46,8 +46,6 @@ class CallbackedExperiment(BaseExperiment): # pylint: disable=abstract-method
         p = cst.Problem()
         for label, cb in callbacks.items():
             assert isinstance(cb, Callback), f"Only instances of 'Callback' can be used. Recieved {cb} of type {type(cb)}"
-            if getattr(cb, "init", None):
-                cb.init(exp=self)
             p.addVariable(label, range(len(callbacks)))
 
         # Definition of constraints
@@ -64,6 +62,14 @@ class CallbackedExperiment(BaseExperiment): # pylint: disable=abstract-method
         if not solution:
             raise BaseException("Impossible to solve")
         return [callbacks[label] for label, precedence in sorted(solution.items(), key=lambda kv: kv[1])]
+
+    @lazyproperty
+    def callbacks(self):
+        callbacks = self.sort_callbacks(self.cfg["callbacks"])
+        for cb in callbacks:
+            if getattr(cb, "init", None):
+                cb.init(exp=self)
+        return callbacks
 
     def fire(self, event, mode=ExperimentMode.ALL):
         cb_messages = []
@@ -106,17 +112,18 @@ class CallbackedExperiment(BaseExperiment): # pylint: disable=abstract-method
         del self.state["mode"]
 
     def run_epoch(self, epoch, *args, **kwargs):
-        self.state["epoch"] = epoch
+        self.state = {"epoch": epoch}
         self.fire("epoch_begin")
         super().run_epoch(epoch=epoch, *args, **kwargs)
         self.fire("epoch_end")
 
 
 class InitState(Callback):
-    before = ["MeasureTime"]
-    def on_epoch_begin(self, epoch, state, **_):
-        state.clear()
-        state.update(epoch=epoch)
+    pass
+#     before = ["MeasureTime"]
+#     def on_epoch_begin(self, epoch, state, **_):
+#         state.clear()
+#         state.update(epoch=epoch)
 
 class SaveWeights(Callback):
     when = ExperimentMode.ALL
@@ -137,7 +144,7 @@ class StateLogger(Callback, metaclass=abc.ABCMeta):
     excluded_keys = ["cycle_name", "cycle_type", "mode"]
     def init(self, exp):
         self.project_name = exp.get("project_name", "unknown_project")
-        self.run_name = json.dumps(exp.grid_sample)
+        self.run_name = ", ".join([f"{k}={v}" for k,v in exp.grid_sample.items()]) or "nil"
         self.config = {k:str(v) for k,v in exp.cfg.items() if not isinstance(v, types.ModuleType)} # lists and dictionnaries don't get printed correctly
 
         grid_sample = dict(exp.grid_sample) # copies the original dictionary
@@ -160,10 +167,11 @@ class AccumulateBatchMetrics(Callback):
     """ Removes metrics output by the model and accumulate them after each batch.
         When cycle ends, restore the accumulated value in state.
     """
-    #when = ExperimentMode.EVAL
-    after = ["InitState"]
+    def __init__(self, metrics=None):
+        self.metrics = metrics
     def init(self, exp):
-        self.metrics = list(exp.metrics.keys()) + ["loss"]
+        if not self.metrics:
+            self.metrics = list(exp.metrics.keys()) + ["loss"]
     def on_cycle_begin(self, **_):
         self.acc = {}
     def on_batch_end(self, state, **_): # 'state' attribute in R/W
@@ -188,13 +196,13 @@ class AverageMetrics(Callback):
 
 class StopFailedTraining(Callback):
     before = ["AccumulateBatchMetrics"]
-    interrupt_scheduled = False
-    def on_cycle_begin(self, **_):
-        if self.interrupt_scheduled:
+    interruption_scheduled = False
+    def on_epoch_begin(self, **_):
+        if self.interruption_scheduled:
             raise FailedTrainingError()
     def on_batch_end(self, loss, **_):
         if np.isnan(loss):
-            self.interrupt_scheduled = True
+            self.interruption_scheduled = True
 
 class GatherCycleMetrics(Callback):
     after = ["AccumulateBatchMetrics"]
@@ -210,7 +218,7 @@ class GatherCycleMetrics(Callback):
         state.update(**self.acc)
 
 class MeasureTime(Callback):
-    after = ["GatherCycleMetrics", "InitState"]
+    after = ["GatherCycleMetrics"]
     before = ["StateLogger"]
     def on_epoch_begin(self, **_):
         self.tic_epoch = time.time()
@@ -242,28 +250,28 @@ class LearningRateDecay(Callback):
     # incompatible with a LearningRateWarmUp callback
     def __init__(self, start, duration=1, factor=0.1):
         # start and duration are expressed in epochs here
-        self.start = start if isinstance(start, list) else [start]
-        self.duration = duration if isinstance(duration, list) else [duration]
-        self.factor = factor if isinstance(factor, list) else [factor]
-        assert len(self.start) == len(self.duration) == len(self.factor), print(self.start, self.duration, self.factor)
+        self.start = start if isinstance(start, list) else ([] if start is None else [start])
+        self.duration = duration
+        self.factor = factor
     def init(self, exp):
         self.learning_rate_setter = exp.set_learning_rate
         self.learning_rate_getter = exp.get_learning_rate
         self.learning_rate = exp.get_learning_rate()
         self.batch_count = sum([len(subset.keys)//exp.batch_size for _, subset in exp.subsets.items() if subset.type == "TRAIN"])
         # adjust start and duration per step
-        self.start = [s*self.batch_count for s in self.start]
-        self.duration = [d*self.batch_count for d in self.duration]
+        self.start = [epoch_start * self.batch_count for epoch_start in self.start]
+        self.duration = self.duration * self.batch_count
     def compute_factor(self, step):
         step_factor = 1.0
-        for start, duration, factor in zip(self.start, self.duration, self.factor):
-            if step >= start+duration: # after decay period
-                step_factor *= factor
-            elif start < step < start+duration: # during decay period
-                step_factor *= factor ** ((step - start)/duration)
+        for start in self.start:
+            stop = start + self.duration
+            if step >= stop: # after decay period
+                step_factor *= self.factor
+            elif start < step < stop: # during decay period
+                step_factor *= self.factor ** ((step - start)/self.duration)
         return step_factor
     def on_batch_begin(self, cycle_type, epoch, batch, **_):
-        if cycle_type == "TRAIN":
+        if cycle_type == "TRAIN" and self.start:
             self.learning_rate_setter(self.learning_rate * self.compute_factor(step=epoch*self.batch_count + batch))
 
 class LearningRateWarmUp(Callback):
