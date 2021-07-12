@@ -1,17 +1,13 @@
 import abc
-from enum import Flag, auto
 import logging
+import random
 
 from tqdm.auto import tqdm
 from mlworkflow import SideRunner, lazyproperty, TransformedDataset, PickledDataset
 
-from .utils import find, RobustBatchesDataset
+from .utils import find, RobustBatchesDataset, ExperimentMode, Subset
 
-class ExperimentMode(Flag):
-    NONE = 0
-    TRAIN = auto()
-    EVAL = auto()
-    ALL = -1
+# pylint: disable=abstract-method
 
 class BaseExperiment(metaclass=abc.ABCMeta):
     batch_count = 0
@@ -75,10 +71,10 @@ class BaseExperiment(metaclass=abc.ABCMeta):
     def batch_size(self):
         return self.cfg["batch_size"]
 
-    def batch_generator(self, keys, batch_size=None):
+    def batch_generator(self, dataset, keys, batch_size=None):
         batch_size = batch_size or self.batch_size
         self.batch_count += len(keys)//batch_size
-        for keys, batch in self.dataset.batches(keys, batch_size, drop_incomplete=True):
+        for keys, batch in dataset.batches(keys, batch_size, drop_incomplete=True):
             yield keys, {"batch_{}".format(k): v for k,v in batch.items()}
 
     @abc.abstractmethod
@@ -93,16 +89,18 @@ class BaseExperiment(metaclass=abc.ABCMeta):
 
     def run_batch(self, subset, batch_id, dataset, mode=ExperimentMode.ALL): # pylint: disable=unused-argument
         keys, data = next(dataset) # pylint: disable=unused-variable
-        if subset.type == "TRAIN":
+        if subset.type == ExperimentMode.TRAIN:
             return self.batch_train(data, mode)
-        elif subset.type == "VALID":
+        elif subset.type == ExperimentMode.EVAL:
             return self.batch_eval(data)
-        elif subset.type == "TEST":
-            return self.batch_eval(data)
+        else:
+            raise ValueError("Subset type should either be {} or {}".format(ExperimentMode.TRAIN, ExperimentMode.EVAL))
 
-    def run_cycle(self, subset, mode: ExperimentMode, epoch_progress):
+    def run_cycle(self, subset: Subset, mode: ExperimentMode, epoch_progress):
         epoch_progress.set_description(subset.name)
-        dataset_generator = iter(self.batch_generator(subset.shuffeled_keys))
+        keys = list(subset.keys)*subset.repetitions
+        random.shuffle(keys)
+        dataset_generator = iter(self.batch_generator(dataset=self.dataset, keys=keys))
         batch_id = 0
         while True:
             try:
@@ -135,8 +133,14 @@ class BaseExperiment(metaclass=abc.ABCMeta):
     def predict(self, data):
         return self.batch_infer(data)
 
+class PseudoRandomExperiment(BaseExperiment):
+    def run_epoch(self, epoch):
+        random_state = random.getstate()
+        random.seed(epoch)
+        super().run_epoch(epoch)
+        random.setstate(random_state)
 
-class AsyncExperiment(BaseExperiment): # pylint: disable=abstract-method
+class AsyncExperiment(BaseExperiment):
     @lazyproperty
     def side_runner(self):
         return SideRunner()
@@ -145,8 +149,10 @@ class AsyncExperiment(BaseExperiment): # pylint: disable=abstract-method
         batch_generator = super().batch_generator(*args, **kwargs)
         return self.side_runner.yield_async(batch_generator)
 
+class StandardExperiment(AsyncExperiment, PseudoRandomExperiment): 
+    pass
 
-class DummyExperiment(BaseExperiment): # pylint: disable=abstract-method
+class DummyExperiment(BaseExperiment):
     def batch_generator(self, *args, **kwargs): # pylint: disable=signature-differs
         self.cfg["dummy"] = True
         gen = super().batch_generator(*args, **kwargs)

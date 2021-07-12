@@ -101,7 +101,7 @@ class TensorflowExperiment(BaseExperiment):
             data = self.__data # temporary variable holding the dictionary of batched data
         except AttributeError:
             # TODO: self.dataset.keys.all() can be slow
-            data = next(iter(self.batch_generator(self.dataset.keys.all(), batch_size=self.batch_size)))[1]
+            data = next(iter(self.batch_generator(dataset=self.dataset, keys=self.dataset.keys.all())))[1]
         inputs = {}
         skipped = []
         for tensor_name in data:

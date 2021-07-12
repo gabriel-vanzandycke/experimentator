@@ -3,8 +3,9 @@ import os
 os.environ["TF_CPP_MIN_LOG_LEVEL"]="2"
 
 import utils
-from .base_experiment import BaseExperiment, AsyncExperiment, DummyExperiment, ExperimentMode
-from .keys_splitter import KeysSplitter, Subset, BasicKeysSplitter
+from .utils import ExperimentMode, Subset
+from .base_experiment import BaseExperiment, AsyncExperiment, DummyExperiment, StandardExperiment
+from .keys_splitter import KeysSplitter, BasicKeysSplitter
 from .manager import ExperimentManager#, ExperimentManagerNotebook
 from .callbacked_experiment import Callback, CallbackedExperiment, InitState, MeasureTime, StopFailedTraining, \
     AccumulateBatchMetrics, SaveLearningRate,  SaveWeights, StateLogger, LogStateDataCollector, GatherCycleMetrics, \
