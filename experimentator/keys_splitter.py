@@ -1,26 +1,5 @@
 import random
-
-from utils import linestyles
-
-class Subset():
-    random_count = 0
-    def __init__(self, name, type, keys, repetitions=1, legend=None):
-        self.name = name
-        self.type = type
-        self.keys = keys
-        self.linestyle = linestyles.get(name, "dotted")
-        self.repetitions = 1 if type == "TRAIN" else repetitions
-        self.legend = legend or self.name
-
-    @property
-    def shuffeled_keys(self):
-        random_state = random.getstate()
-        random.seed(self.random_count)
-        shuffeled_keys = list(self.keys)*self.repetitions
-        random.shuffle(shuffeled_keys)
-        random.setstate(random_state)
-        self.random_count += 1
-        return shuffeled_keys
+from utils import linestyles, ExperimentMode, Subset
 
 
 class KeysSplitter(): # pylint: disable=too-few-public-methods
@@ -55,7 +34,7 @@ class BasicKeysSplitter(KeysSplitter):
         training_keys   = keys[u2*l//100:]
 
         return {
-            "training": Subset("training", "TRAIN", training_keys),
-            "validation": Subset("validation", "VALID", validation_keys, repetitions=5),
-            "testing": Subset("testing", "TEST", testing_keys, repetitions=5),
+            "training": Subset("training", type=ExperimentMode.TRAIN, keys=training_keys),
+            "validation": Subset("validation", type=ExperimentMode.EVAL, keys=validation_keys),
+            "testing": Subset("testing", type=ExperimentMode.EVAL, keys=testing_keys),
         }
