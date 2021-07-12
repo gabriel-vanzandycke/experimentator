@@ -1,16 +1,19 @@
-import os
-import sys
-import re
-import datetime as DT
 import errno
+import os
+import re
+import sys
+
+import datetime as DT
+from dataclasses import dataclass
+from enum import IntFlag
+
 import dill as pickle
 import matplotlib as mpl
 from matplotlib import pyplot as plt
 import numpy as np
+
 from mlworkflow import get_callable, Dataset
 from mlworkflow.datasets import batchify
-
-
 
 def insert_suffix(filename, suffix):
     root, ext = os.path.splitext(filename)
@@ -185,10 +188,23 @@ linestyles = {
     "testing": "-."
 }
 
+# This object is defined both in here and in dataset-utilities repository
+# Any change here should be reported in dataset-utilities as well
+class ExperimentMode(IntFlag):
+    NONE  = 0
+    TRAIN = 1
+    EVAL  = 2
+    ALL   = -1
 
-
-
-
+# This object is defined both in here and in dataset-utilities repository
+# Any change here should be reported in dataset-utilities as well
+@dataclass
+class Subset:
+    name: str
+    type: IntFlag
+    keys: list
+    repetitions: int = 1
+    desc: str = None
 
 
 class DataCollector(dict):
