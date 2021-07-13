@@ -35,6 +35,7 @@ class Callback():
 
 class CallbackedExperiment(BaseExperiment): # pylint: disable=abstract-method
     state = {}
+
     @staticmethod
     def sort_callbacks(callbacks):
         # Indexing callbacks with labels in ["A", "B", "C", ...]
@@ -250,7 +251,7 @@ class LearningRateDecay(Callback):
     # incompatible with a LearningRateWarmUp callback
     def __init__(self, start, duration=1, factor=0.1):
         # start and duration are expressed in epochs here
-        self.start = start if isinstance(start, list) else ([] if start is None else [start])
+        self.start = start if isinstance(start, (list, tuple)) else ([] if start is None else [start])
         self.duration = duration
         self.factor = factor
     def init(self, exp):
