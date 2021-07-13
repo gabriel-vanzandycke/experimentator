@@ -30,12 +30,10 @@ def update_ast(tree, overwrite):
         if not isinstance(node, ast.Assign):
             continue
         for target in node.targets:
-            assert isinstance(target, ast.Name), "Tuple assignation is not allowed in config files (e.g. `a,b=1,2`). {}".format(type(target))
+            assert isinstance(target, ast.Name), "Tuple assignation is not allowed in config files (e.g. `a,b=1,2`). Impossible to overwrite '{}' of type '{}'".format(target.id, type(target))
             assert target.id not in met_targets, "Double assignation is not allowed in config files. '{}' seems to be assigned twice.".format(target.id)
             if target.id in overwrite:
-                assert isinstance(node.value, ast.Constant), "Only overwritting constants is currently supported"
-                # Replace node value by the value in overwrite
-                node.value.value = overwrite.pop(target.id)
+                node.value = ast.parse(repr(overwrite.pop(target.id))).body[0].value
                 met_targets.append(target.id)
     # Add remaining keys
     for key, value in overwrite.items():
@@ -126,6 +124,10 @@ class Job():
 
         if not keep:
             del self.exp
+            # for k in list(self.config):
+            #     del self.config[k]
+            #     print(f"{k} deleted")
+            # del self.config
 
 class ExperimentManager():
     def __init__(self, filename, logfile=None, num_workers=0, dummy=False, **grid_search):
@@ -173,6 +175,7 @@ class ExperimentManager():
                     #p.start()
                     #p.join()
                     job.run(epochs=epochs, keep=False, **runtime_cfg) # pylint: disable=expression-not-assigned
+
         if self.side_runner:
             self.side_runner.collect_runs()
 
@@ -200,7 +203,6 @@ def main():
 
     manager = ExperimentManager(args.filename, logfile=args.logfile, dummy=args.dummy, **grid)
     manager.execute(args.epochs, **kwargs)
-
 
 
     # def dump(self, filename="joblist.index"):
