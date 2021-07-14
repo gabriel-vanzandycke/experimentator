@@ -11,8 +11,8 @@ import constraint as cst
 import numpy as np
 from mlworkflow import lazyproperty
 
-from experimentator.utils import DataCollector
-from experimentator import BaseExperiment, ExperimentMode
+from experimentator.utils import DataCollector, SubsetType, ExperimentMode
+from experimentator import BaseExperiment
 
 # pylint: disable=logging-fstring-interpolation
 
@@ -258,7 +258,7 @@ class LearningRateDecay(Callback):
         self.learning_rate_setter = exp.set_learning_rate
         self.learning_rate_getter = exp.get_learning_rate
         self.learning_rate = exp.get_learning_rate()
-        self.batch_count = sum([len(subset.keys)//exp.batch_size for _, subset in exp.subsets.items() if subset.type == "TRAIN"])
+        self.batch_count = sum([len(subset.keys)//exp.batch_size for _, subset in exp.subsets.items() if subset.type & SubsetType.TRAIN])
         # adjust start and duration per step
         self.start = [epoch_start * self.batch_count for epoch_start in self.start]
         self.duration = self.duration * self.batch_count
@@ -272,7 +272,7 @@ class LearningRateDecay(Callback):
                 step_factor *= self.factor ** ((step - start)/self.duration)
         return step_factor
     def on_batch_begin(self, cycle_type, epoch, batch, **_):
-        if cycle_type == "TRAIN" and self.start:
+        if cycle_type == SubsetType.TRAIN and self.start:
             self.learning_rate_setter(self.learning_rate * self.compute_factor(step=epoch*self.batch_count + batch))
 
 class LearningRateWarmUp(Callback):
@@ -287,7 +287,7 @@ class LearningRateWarmUp(Callback):
         self.learning_rate_setter = exp.set_learning_rate
         self.learning_rate_getter = exp.get_learning_rate
         self.learning_rate = exp.get_learning_rate()
-        self.batch_count = sum([len(subset.keys)//exp.batch_size for _, subset in exp.subsets.items() if subset.type == "TRAIN"])
+        self.batch_count = sum([len(subset.keys)//exp.batch_size for _, subset in exp.subsets.items() if subset.type & SubsetType.TRAIN])
         # adjust start and duration per step
         self.start *= self.batch_count
         self.duration *= self.batch_count
@@ -299,5 +299,5 @@ class LearningRateWarmUp(Callback):
             step_factor *= self.factor ** (1.0 - (step - self.start)/self.duration)
         return step_factor
     def on_batch_begin(self, cycle_type, epoch, batch, **_):
-        if cycle_type == "TRAIN":
+        if cycle_type == SubsetType.TRAIN:
             self.learning_rate_setter(self.learning_rate * self.compute_factor(step=epoch*self.batch_count + batch))

@@ -7,6 +7,8 @@ from tensorflow.python.client import timeline # pylint: disable=no-name-in-modul
 from .base_experiment import BaseExperiment, lazyproperty, ExperimentMode
 from .callbacked_experiment import Callback
 
+from .utils import SubsetType
+
 #os.environ['AUTOGRAPH_VERBOSITY'] = "5"
 #tf.config.set_soft_device_placement(False)
 try:
@@ -205,7 +207,7 @@ class EpochExponentialMovingAverage(Callback):
     def on_epoch_begin(self, **_):
         self.ema = tf.train.ExponentialMovingAverage(decay=self.decay)
     def on_batch_end(self, cycle_type, **_):
-        if cycle_type == "TRAIN":
+        if cycle_type & SubsetType.TRAIN:
             self.ema.apply(self.train_model.trainable_variables)
     def on_epoch_end(self, **_):
         for var in self.train_model.trainable_variables:
