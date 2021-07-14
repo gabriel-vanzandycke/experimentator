@@ -1,5 +1,5 @@
 import random
-from utils import linestyles, ExperimentMode, Subset
+from utils import linestyles, SubsetType, Subset
 
 
 class KeysSplitter(): # pylint: disable=too-few-public-methods
@@ -34,7 +34,7 @@ class BasicKeysSplitter(KeysSplitter):
         training_keys   = keys[u2*l//100:]
 
         return {
-            "training": Subset("training", type=ExperimentMode.TRAIN, keys=training_keys),
-            "validation": Subset("validation", type=ExperimentMode.EVAL, keys=validation_keys),
-            "testing": Subset("testing", type=ExperimentMode.EVAL, keys=testing_keys),
+            "training": Subset("training", type=SubsetType.TRAIN, keys=training_keys),
+            "validation": Subset("validation", type=SubsetType.EVAL, keys=validation_keys),
+            "testing": Subset("testing", type=SubsetType.EVAL, keys=testing_keys),
         }

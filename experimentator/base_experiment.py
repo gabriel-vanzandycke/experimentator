@@ -5,7 +5,7 @@ import random
 from tqdm.auto import tqdm
 from mlworkflow import SideRunner, lazyproperty, TransformedDataset, PickledDataset
 
-from .utils import find, RobustBatchesDataset, ExperimentMode, Subset
+from .utils import find, RobustBatchesDataset, ExperimentMode, Subset, SubsetType
 
 # pylint: disable=abstract-method
 
@@ -89,12 +89,12 @@ class BaseExperiment(metaclass=abc.ABCMeta):
 
     def run_batch(self, subset, batch_id, dataset, mode=ExperimentMode.ALL): # pylint: disable=unused-argument
         keys, data = next(dataset) # pylint: disable=unused-variable
-        if subset.type == ExperimentMode.TRAIN:
+        if subset.type == SubsetType.TRAIN:
             return self.batch_train(data, mode)
-        elif subset.type == ExperimentMode.EVAL:
+        elif subset.type == SubsetType.EVAL:
             return self.batch_eval(data)
         else:
-            raise ValueError("Subset type should either be {} or {}".format(ExperimentMode.TRAIN, ExperimentMode.EVAL))
+            raise ValueError("Subset type should either be {} or {}".format(SubsetType.TRAIN, SubsetType.EVAL))
 
     def run_cycle(self, subset: Subset, mode: ExperimentMode, epoch_progress):
         epoch_progress.set_description(subset.name)
@@ -118,7 +118,7 @@ class BaseExperiment(metaclass=abc.ABCMeta):
             eval_frequency = self.cfg.get("eval_frequency", 1)
             if eval_frequency and (epoch % eval_frequency) == 0:
                 mode = ExperimentMode.EVAL
-            elif subset.type == 'TRAIN':
+            elif subset.type == SubsetType.TRAIN:
                 mode = ExperimentMode.TRAIN
             else:
                 continue # skip this cycle for this epoch

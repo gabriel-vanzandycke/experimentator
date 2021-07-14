@@ -188,8 +188,6 @@ linestyles = {
     "testing": "-."
 }
 
-# This object is defined both in here and in dataset-utilities repository
-# Any change here should be reported in dataset-utilities as well
 class ExperimentMode(IntFlag):
     NONE  = 0
     TRAIN = 1
@@ -198,10 +196,16 @@ class ExperimentMode(IntFlag):
 
 # This object is defined both in here and in dataset-utilities repository
 # Any change here should be reported in dataset-utilities as well
+class SubsetType(IntFlag):
+    TRAIN = 1
+    EVAL  = 2
+
+# This object is defined both in here and in dataset-utilities repository
+# Any change here should be reported in dataset-utilities as well
 @dataclass
 class Subset:
     name: str
-    type: IntFlag
+    type: SubsetType
     keys: list
     repetitions: int = 1
     desc: str = None

@@ -3,7 +3,7 @@ import os
 os.environ["TF_CPP_MIN_LOG_LEVEL"]="2"
 
 import utils
-from .utils import ExperimentMode, Subset
+from .utils import ExperimentMode, Subset, SubsetType
 from .base_experiment import BaseExperiment, AsyncExperiment, DummyExperiment, StandardExperiment
 from .keys_splitter import KeysSplitter, BasicKeysSplitter
 from .manager import ExperimentManager#, ExperimentManagerNotebook

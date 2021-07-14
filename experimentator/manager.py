@@ -145,7 +145,7 @@ class ExperimentManager():
             tree = ast.parse(f.read())
 
         if not grid_search:
-            self.jobs = [Job(filename, config_tree=tree)]
+            self.jobs = [Job(filename, config_tree=tree, dummy=dummy)]
         else:
             self.jobs = []
             for grid_sample in product_kwargs(**grid_search):
