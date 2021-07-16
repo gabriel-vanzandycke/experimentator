@@ -3,6 +3,7 @@ import itertools
 import json
 import logging
 import os
+import inspect
 import re
 import time
 import types
@@ -32,6 +33,15 @@ class Callback():
             cb(**state, state=state) # pylint: disable=not-callable
     def __str__(self):
         return self.__class__.__name__
+    def __repr__(self):
+        try:
+            config = getattr(self, "config", {name: getattr(self, name) for name in inspect.getfullargspec(self.__init__).args[1:]})
+        except KeyError as e:
+            print("You should implement the 'config' property that returns a dictionnary of config given to '__init__'")
+            raise e
+        attributes = ",".join("{}={}".format(k, v) for k,v in config.items())
+        return "{}({})".format(self.__class__.__name__, attributes)
+
 
 class CallbackedExperiment(BaseExperiment): # pylint: disable=abstract-method
     state = {}
