@@ -1,6 +1,8 @@
+from dataclasses import dataclass
 import os
 import glob
 import logging
+from enum import IntFlag
 import numpy as np
 import tensorflow as tf
 from tensorflow.python.client import timeline # pylint: disable=no-name-in-module, unused-import
@@ -195,13 +197,12 @@ class TensorflowExperiment(BaseExperiment):
         return self.infer_model.test_step(self.select_data(data))
 
 
-
+@dataclass
 class EpochExponentialMovingAverage(Callback):
     """ 'decay' is highly dependant on the dataset size, dataset homogenity and batch size.
         /!\  tf_decay = 1 - torch_decay
     """
-    def __init__(self, decay):
-        self.decay = decay
+    decay: float
     def init(self, exp):
         self.train_model = exp.train_model
     def on_epoch_begin(self, **_):
@@ -220,11 +221,11 @@ class TensorFlowProfilerExperiment(TensorflowExperiment):
             result = super().run_batch(*args, subset=subset, batch_id=batch_id, **kwargs)
         return result
 
+@dataclass
 class ProfileCallback(Callback):
-    def __init__(self, batch_start=1, batch_stop=2, mode=ExperimentMode.ALL):
-        self.batch_start = batch_start
-        self.batch_stop = batch_stop
-        self.mode = mode
+    batch_start: int = 1,
+    batch_stop: int = 2,
+    mode: (IntFlag, int) = ExperimentMode.ALL
     # def __init__(self, exp):
     #     self.writer = tf.summary.create_file_writer("logdir")
     #     tf.debugging.experimental.enable_dump_debug_info("logdir", tensor_debug_mode="FULL_HEALTH", circular_buffer_size=-1)

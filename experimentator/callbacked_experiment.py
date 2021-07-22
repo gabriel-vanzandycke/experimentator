@@ -1,9 +1,8 @@
 import abc
+from dataclasses import dataclass
 import itertools
-import json
 import logging
 import os
-import inspect
 import re
 import time
 import types
@@ -21,6 +20,7 @@ class FailedTrainingError(BaseException):
     pass
 
 
+@dataclass
 class Callback():
     after = []
     before = []
@@ -31,17 +31,6 @@ class Callback():
         cb = getattr(self, "on_{}".format(event), None)
         if cb:
             cb(**state, state=state) # pylint: disable=not-callable
-    def __str__(self):
-        return self.__class__.__name__
-    def __repr__(self):
-        try:
-            config = getattr(self, "config", {name: getattr(self, name) for name in inspect.getfullargspec(self.__init__).args[1:]})
-        except KeyError as e:
-            print("You should implement the 'config' property that returns a dictionnary of config given to '__init__'")
-            raise e
-        attributes = ",".join("{}={}".format(k, v) for k,v in config.items())
-        return "{}({})".format(self.__class__.__name__, attributes)
-
 
 class CallbackedExperiment(BaseExperiment): # pylint: disable=abstract-method
     state = {}
@@ -128,20 +117,12 @@ class CallbackedExperiment(BaseExperiment): # pylint: disable=abstract-method
         super().run_epoch(epoch=epoch, *args, **kwargs)
         self.fire("epoch_end")
 
-
-class InitState(Callback):
-    pass
-#     before = ["MeasureTime"]
-#     def on_epoch_begin(self, epoch, state, **_):
-#         state.clear()
-#         state.update(epoch=epoch)
-
+@dataclass
 class SaveWeights(Callback):
     when = ExperimentMode.ALL
     after = ["AverageLoss", "GatherCycleMetrics"]
     min_loss = None
-    def __init__(self, strategy="best"):
-        self.strategy = strategy
+    strategy: str = "best"
     def init(self, exp):
         self.exp = exp
     def on_epoch_end(self, epoch, **state):
@@ -156,7 +137,7 @@ class StateLogger(Callback, metaclass=abc.ABCMeta):
     def init(self, exp):
         self.project_name = exp.get("project_name", "unknown_project")
         self.run_name = ", ".join([f"{k}={v}" for k,v in exp.grid_sample.items()]) or "nil"
-        self.config = {k:str(v) for k,v in exp.cfg.items() if not isinstance(v, types.ModuleType)} # lists and dictionnaries don't get printed correctly
+        self.config = {k:v for k,v in exp.cfg.items() if not isinstance(v, types.ModuleType)} # lists and dictionnaries don't get printed correctly
 
         grid_sample = dict(exp.grid_sample) # copies the original dictionary
         grid_sample.pop("fold", None)       # removes 'fold' to be able to group runs
@@ -174,12 +155,12 @@ class LogStateDataCollector(StateLogger):
         self.logger.update(**{k:v for k,v in state.items() if k not in self.excluded_keys})
         self.logger.checkpoint()
 
+@dataclass
 class AccumulateBatchMetrics(Callback):
     """ Removes metrics output by the model and accumulate them after each batch.
         When cycle ends, restore the accumulated value in state.
     """
-    def __init__(self, metrics=None):
-        self.metrics = metrics
+    metrics: list = None
     def init(self, exp):
         if not self.metrics:
             self.metrics = list(exp.metrics.keys()) + ["loss"]
@@ -193,11 +174,11 @@ class AccumulateBatchMetrics(Callback):
     def on_cycle_end(self, state, **_): # 'state' attribute in R/W
         state.update(**self.acc) # allows augmenting metrics before gathering
 
+@dataclass
 class AverageMetrics(Callback):
     after = ["AccumulateBatchMetrics"]
     before = ["GatherCycleMetrics"]
-    def __init__(self, patterns):
-        self.patterns = patterns
+    patterns: list
     def on_cycle_end(self, batch, state, **_):
         for name in state:
             for pattern in self.patterns:
@@ -257,21 +238,29 @@ class SaveLearningRate(Callback):
     def on_epoch_end(self, state, **_):
         state["learning_rate"] = self.learning_rate_getter()
 
+@dataclass
 class LearningRateDecay(Callback):
-    # incompatible with a LearningRateWarmUp callback
-    def __init__(self, start, duration=1, factor=0.1):
-        # start and duration are expressed in epochs here
-        self.start = start if isinstance(start, (list, tuple)) else ([] if start is None else [start])
-        self.duration = duration
-        self.factor = factor
+    """ Decay learning rate by a given factor spread on every batch for a given
+        number of epochs.
+        This callback is incompatible with a `LearningRateWarmUp` callback
+        because learning rate is set from both callbacks at the beginning of
+        each batch.
+        start and duration are expressed in epochs here
+    """
+    start: (int, list, tuple)
+    duration: int = 1
+    factor: float = 0.1
+    def __post_init__(self):
+        self.start = self.start if isinstance(self.start, (list, tuple)) else ([] if self.start is None else [self.start])
     def init(self, exp):
         self.learning_rate_setter = exp.set_learning_rate
         self.learning_rate_getter = exp.get_learning_rate
-        self.learning_rate = exp.get_learning_rate()
+        self.learning_rate = self.learning_rate_getter()
         self.batch_count = sum([len(subset.keys)//exp.batch_size for _, subset in exp.subsets.items() if subset.type & SubsetType.TRAIN])
         # adjust start and duration per step
         self.start = [epoch_start * self.batch_count for epoch_start in self.start]
         self.duration = self.duration * self.batch_count
+        assert all([not isinstance(cb, LearningRateWarmUp) for cb in exp.cfg['callbacks']]), f"{self.__class__} is incompatible with LearningRateWarmUp"
     def compute_factor(self, step):
         step_factor = 1.0
         for start in self.start:
@@ -285,22 +274,28 @@ class LearningRateDecay(Callback):
         if cycle_type == SubsetType.TRAIN and self.start:
             self.learning_rate_setter(self.learning_rate * self.compute_factor(step=epoch*self.batch_count + batch))
 
+@dataclass
 class LearningRateWarmUp(Callback):
-    # incompatible with a LearningRateDecay callback
+    """ Decay learning rate by a given factor spread on every batch for a given
+        number of epochs.
+        This callback is incompatible with a `LearningRateDecay` callback
+        because learning rate is set from both callbacks at the beginning of
+        each batch.
+        start and duration are expressed in epochs here
+    """
     # TODO: check tf.keras.optimizers.schedules.LearningRateSchedule
-    def __init__(self, start=0, duration=2, factor=0.001):#, warm_restart_schedule=None, warm_restart_duration=0.5):
-        # start and duration are expressed in epochs here
-        self.start = start
-        self.duration = duration
-        self.factor = factor
+    start: int = 0
+    duration: int = 2
+    factor: float = 0.001
     def init(self, exp):
         self.learning_rate_setter = exp.set_learning_rate
         self.learning_rate_getter = exp.get_learning_rate
-        self.learning_rate = exp.get_learning_rate()
+        self.learning_rate = self.learning_rate_getter()
         self.batch_count = sum([len(subset.keys)//exp.batch_size for _, subset in exp.subsets.items() if subset.type & SubsetType.TRAIN])
         # adjust start and duration per step
         self.start *= self.batch_count
         self.duration *= self.batch_count
+        assert all([not isinstance(cb, LearningRateDecay) for cb in exp.cfg['callbacks']]), f"{self.__class__} is incompatible with LearningRateDecay"
     def compute_factor(self, step):
         step_factor = 1.0
         if step <= self.start:
@@ -311,3 +306,17 @@ class LearningRateWarmUp(Callback):
     def on_batch_begin(self, cycle_type, epoch, batch, **_):
         if cycle_type == SubsetType.TRAIN:
             self.learning_rate_setter(self.learning_rate * self.compute_factor(step=epoch*self.batch_count + batch))
+
+@dataclass
+class PrintLoss(Callback):
+    """ Prints current batch loss every 'period' seconds
+    """
+    before = ["AccumulateBatchMetrics"]
+    period: int = 10
+    def __post_init__(self):
+        self.tic = time.time()
+    def on_batch_end(self, epoch, batch, loss, **_):
+        tac = time.time()
+        if tac - self.tic > self.period:
+            print(f"Epoch:{epoch} Batch:{batch} - batch loss={loss}")
+            self.tic = tac

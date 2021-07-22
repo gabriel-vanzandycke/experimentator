@@ -1,27 +1,29 @@
 import os
 import pandas
 from mlworkflow import lazyproperty
-import wandb
 from experimentator import StateLogger
+import wandb
 
 os.environ["WANDB_SILENT"] = "true"
 
 class LogStateWandB(StateLogger):
     best_report = {}
-    def __init__(self, criterion_metric=None):
+    def __init__(self, criterion_metric=None, mode="online"):
         self.criterion_metric = criterion_metric
+        self.mode = mode
     @lazyproperty
     def wandb(self):
         wandb.init(
             project=self.project_name,
             reinit=True,
             config=self.config,
-            settings=wandb.Settings(show_emoji=False)
+            settings=wandb.Settings(show_emoji=False),
+            mode=self.mode,
         )
         wandb.run.name = self.run_name
         return wandb
     def __del__(self):
-        self.wandb.finish()
+        wandb.finish()
     def on_epoch_end(self, state, **_):
         report = {}
         for key, data in state.items():

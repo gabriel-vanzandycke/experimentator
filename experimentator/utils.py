@@ -1,4 +1,5 @@
 import errno
+import inspect
 import os
 import re
 import sys
@@ -18,6 +19,17 @@ from mlworkflow.datasets import batchify
 def insert_suffix(filename, suffix):
     root, ext = os.path.splitext(filename)
     return root + suffix + ext
+
+# TODO: could be implemented using dataclass
+class ChunkProcessor():
+    def __repr__(self):
+        try:
+            config = getattr(self, "config", {name: getattr(self, name) for name in inspect.getfullargspec(self.__init__).args[1:]})
+        except KeyError as e:
+            print("You should implement the 'config' property that returns a dictionnary of config given to '__init__'")
+            raise e
+        attributes = ",".join("{}={}".format(k, v) for k,v in config.items())
+        return "{}({})".format(self.__class__.__name__, attributes)
 
 class OutputInhibitor():
     def __init__(self, name=None):

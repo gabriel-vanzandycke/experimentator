@@ -1,8 +1,5 @@
 import tensorflow as tf
-
-class ChunkProcessor():
-    def __str__(self):
-        return self.__class__.__name__
+from experimentator import ChunkProcessor
 
 class DoNothing(ChunkProcessor):
     def __call__(self, chunk):

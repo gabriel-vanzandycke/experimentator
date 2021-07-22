@@ -140,6 +140,13 @@ class PseudoRandomExperiment(BaseExperiment):
         super().run_epoch(epoch)
         random.setstate(random_state)
 
+    def run_cycle(self, subset, *args, **kwargs):
+        random_state = random.getstate()
+        if subset.type == SubsetType.EVAL:
+            random.seed(0)
+        super().run_cycle(*args, subset=subset, **kwargs)
+        random.setstate(random_state)
+
 class AsyncExperiment(BaseExperiment):
     @lazyproperty
     def side_runner(self):
