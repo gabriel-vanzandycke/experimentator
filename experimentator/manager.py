@@ -124,10 +124,6 @@ class Job():
 
         if not keep:
             del self.exp
-            # for k in list(self.config):
-            #     del self.config[k]
-            #     print(f"{k} deleted")
-            # del self.config
 
 class ExperimentManager():
     def __init__(self, filename, logfile=None, num_workers=0, dummy=False, **grid_search):

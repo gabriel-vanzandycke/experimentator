@@ -1,11 +1,12 @@
 import errno
 import inspect
 import os
+import random
 import re
 import sys
 
 import datetime as DT
-from dataclasses import dataclass
+import dataclasses
 from enum import IntFlag
 
 import dill as pickle
@@ -54,26 +55,6 @@ class OutputInhibitor():
         self.fp.close()
         if self.name:
             print("Done.")
-
-
-class RobustBatchesDataset(Dataset):
-    def __init__(self, parent):
-        self.parent = parent
-    def yield_keys(self):
-        yield from self.parent.yield_keys()
-    def query_item(self, key):
-        return self.parent.query_item(key)
-    def chunkify(self, keys, chunk_size, drop_incomplete=True):
-        d = []
-        for kv in ((k,v) for k,v in ((k, self.query_item(k)) for k in keys) if v is not None):
-            d.append(kv)
-            if len(d) == chunk_size:  # yield complete sublist and create a new list
-                yield d
-                d = []
-        assert drop_incomplete, "not implemented"
-    def batches(self, keys, batch_size, wrapper=np.array, drop_incomplete=False):
-        for chunk in self.chunkify(keys, chunk_size=batch_size, drop_incomplete=drop_incomplete):
-            yield [kv[0] for kv in chunk], batchify([kv[1] for kv in chunk], wrapper=wrapper)
 
 
 def mkdir(path):
@@ -205,23 +186,6 @@ class ExperimentMode(IntFlag):
     TRAIN = 1
     EVAL  = 2
     ALL   = -1
-
-# This object is defined both in here and in dataset-utilities repository
-# Any change here should be reported in dataset-utilities as well
-class SubsetType(IntFlag):
-    TRAIN = 1
-    EVAL  = 2
-
-# This object is defined both in here and in dataset-utilities repository
-# Any change here should be reported in dataset-utilities as well
-@dataclass
-class Subset:
-    name: str
-    type: SubsetType
-    keys: list
-    repetitions: int = 1
-    desc: str = None
-
 
 class DataCollector(dict):
     external = frozenset()

@@ -11,8 +11,7 @@ import constraint as cst
 import numpy as np
 from mlworkflow import lazyproperty
 
-from experimentator.utils import DataCollector, SubsetType, ExperimentMode
-from experimentator import BaseExperiment
+from experimentator import BaseExperiment, SubsetType, ExperimentMode, DataCollector
 
 # pylint: disable=logging-fstring-interpolation
 

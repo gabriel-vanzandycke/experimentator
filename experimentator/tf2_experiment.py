@@ -6,10 +6,8 @@ from enum import IntFlag
 import numpy as np
 import tensorflow as tf
 from tensorflow.python.client import timeline # pylint: disable=no-name-in-module, unused-import
-from .base_experiment import BaseExperiment, lazyproperty, ExperimentMode
-from .callbacked_experiment import Callback
-
-from .utils import SubsetType
+from experimentator import BaseExperiment, ExperimentMode, Callback, SubsetType
+from mlworkflow import lazyproperty
 
 #os.environ['AUTOGRAPH_VERBOSITY'] = "5"
 #tf.config.set_soft_device_placement(False)
@@ -104,8 +102,7 @@ class TensorflowExperiment(BaseExperiment):
         try:
             data = self.__data # temporary variable holding the dictionary of batched data
         except AttributeError:
-            # TODO: self.dataset.keys.all() can be slow
-            data = next(iter(self.batch_generator(dataset=self.dataset, keys=self.dataset.keys.all())))[1]
+            data = next(iter(self.batch_generator(subset=self.subsets['training'])))[1]
         inputs = {}
         skipped = []
         for tensor_name in data:

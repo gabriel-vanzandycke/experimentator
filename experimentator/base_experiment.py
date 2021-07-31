@@ -5,7 +5,8 @@ import random
 from tqdm.auto import tqdm
 from mlworkflow import SideRunner, lazyproperty, TransformedDataset, PickledDataset
 
-from .utils import find, RobustBatchesDataset, ExperimentMode, Subset, SubsetType
+from .dataset import Subset, SubsetType
+from .utils import find, ExperimentMode
 
 # pylint: disable=abstract-method
 
@@ -51,18 +52,8 @@ class BaseExperiment(metaclass=abc.ABCMeta):
         return self.cfg["grid_sample"]
 
     @lazyproperty
-    def dataset(self):
-        dataset_name = self.cfg["dataset_name"]
-        dataset = PickledDataset(find(dataset_name, verbose=False))
-        dataset = TransformedDataset(dataset, self.get("transforms", []))
-        dataset = RobustBatchesDataset(dataset)
-        return dataset
-
-    @lazyproperty
     def subsets(self):
-        subsets = self.cfg["keys_splitter"](self.dataset.keys, fold=self.get("fold", default=0))
-        self.cfg["subsets_sizes"] = {subset_name: len(subset.keys) for subset_name, subset in subsets.items()}
-        return subsets
+        return self.cfg["subsets"]
 
     def progress(self, generator, **kwargs):
         return tqdm(generator, **kwargs, disable=self.get("hide_progress", False), leave=False)
@@ -71,10 +62,10 @@ class BaseExperiment(metaclass=abc.ABCMeta):
     def batch_size(self):
         return self.cfg["batch_size"]
 
-    def batch_generator(self, dataset, keys, batch_size=None):
+    def batch_generator(self, subset: Subset, batch_size=None):
         batch_size = batch_size or self.batch_size
-        self.batch_count += len(keys)//batch_size
-        for keys, batch in dataset.batches(keys, batch_size, drop_incomplete=True):
+        self.batch_count += len(subset.keys)//batch_size
+        for keys, batch in subset.dataset.batches(subset.keys, batch_size, drop_incomplete=True):
             yield keys, {"batch_{}".format(k): v for k,v in batch.items()}
 
     @abc.abstractmethod
@@ -87,8 +78,8 @@ class BaseExperiment(metaclass=abc.ABCMeta):
     def batch_eval(self, *args, **kwargs):
         raise NotImplementedError("Should be implemented in the framework specific Experiment.")
 
-    def run_batch(self, subset, batch_id, dataset, mode=ExperimentMode.ALL): # pylint: disable=unused-argument
-        keys, data = next(dataset) # pylint: disable=unused-variable
+    def run_batch(self, subset, batch_id, batch_generator, mode=ExperimentMode.ALL): # pylint: disable=unused-argument
+        keys, data = next(batch_generator) # pylint: disable=unused-variable
         if subset.type == SubsetType.TRAIN:
             return self.batch_train(data, mode)
         elif subset.type == SubsetType.EVAL:
@@ -98,13 +89,11 @@ class BaseExperiment(metaclass=abc.ABCMeta):
 
     def run_cycle(self, subset: Subset, mode: ExperimentMode, epoch_progress):
         epoch_progress.set_description(subset.name)
-        keys = list(subset.keys)*subset.repetitions
-        random.shuffle(keys)
-        dataset_generator = iter(self.batch_generator(dataset=self.dataset, keys=keys))
+        batch_generator = iter(self.batch_generator(subset=subset))
         batch_id = 0
         while True:
             try:
-                _ = self.run_batch(subset=subset, batch_id=batch_id, dataset=dataset_generator, mode=mode)
+                _ = self.run_batch(subset=subset, batch_id=batch_id, batch_generator=batch_generator, mode=mode)
                 epoch_progress.update(1)
                 batch_id += 1
             except StopIteration:
@@ -133,20 +122,6 @@ class BaseExperiment(metaclass=abc.ABCMeta):
     def predict(self, data):
         return self.batch_infer(data)
 
-class PseudoRandomExperiment(BaseExperiment):
-    def run_epoch(self, epoch):
-        random_state = random.getstate()
-        random.seed(epoch)
-        super().run_epoch(epoch)
-        random.setstate(random_state)
-
-    def run_cycle(self, subset, *args, **kwargs):
-        random_state = random.getstate()
-        if subset.type == SubsetType.EVAL:
-            random.seed(0)
-        super().run_cycle(*args, subset=subset, **kwargs)
-        random.setstate(random_state)
-
 class AsyncExperiment(BaseExperiment):
     @lazyproperty
     def side_runner(self):
@@ -155,9 +130,6 @@ class AsyncExperiment(BaseExperiment):
     def batch_generator(self, *args, **kwargs): # pylint: disable=signature-differs
         batch_generator = super().batch_generator(*args, **kwargs)
         return self.side_runner.yield_async(batch_generator)
-
-class StandardExperiment(AsyncExperiment, PseudoRandomExperiment): 
-    pass
 
 class DummyExperiment(BaseExperiment):
     def batch_generator(self, *args, **kwargs): # pylint: disable=signature-differs
