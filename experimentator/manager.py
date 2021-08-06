@@ -41,6 +41,16 @@ def update_ast(tree, overwrite):
     ast.fix_missing_locations(tree)
     return overwrite
 
+def parse_config_str(config_str):
+    config = {}
+    exec(config_str, None, config) # pylint: disable=exec-used
+    return config
+
+def parse_config_file(config_filename):
+    with open(config_filename, "r") as f:
+        config = parse_config_str(f.read())
+    return config
+
 class JobStatus(Enum):
     TODO = 0
     BUSY = 1

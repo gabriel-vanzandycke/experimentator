@@ -1,5 +1,6 @@
 import abc
 from dataclasses import dataclass
+from enum import IntFlag
 import itertools
 import logging
 import os
@@ -118,10 +119,10 @@ class CallbackedExperiment(BaseExperiment): # pylint: disable=abstract-method
 
 @dataclass
 class SaveWeights(Callback):
-    when = ExperimentMode.ALL
     after = ["AverageLoss", "GatherCycleMetrics"]
     min_loss = None
     strategy: str = "best"
+    when: IntFlag = ExperimentMode.EVAL
     def init(self, exp):
         self.exp = exp
     def on_epoch_end(self, epoch, **state):
