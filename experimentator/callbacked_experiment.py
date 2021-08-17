@@ -129,7 +129,8 @@ class SaveWeights(Callback):
         if     (self.strategy == "best" and (self.min_loss is None or state["training_loss"] < self.min_loss)) \
             or (self.strategy == "all"):
             self.min_loss = state.get("training_loss", None)
-            self.exp.save_weights(f"{self.exp.folder}/{epoch:04d}{self.exp.weights_suffix}")
+            filename = os.path.join(self.exp.folder, self.exp.weights_formated_filename.format(epoch=epoch))
+            self.exp.save_weights(filename)
 
 class StateLogger(Callback, metaclass=abc.ABCMeta):
     after = ["GatherCycleMetrics", "MeasureTime", "SaveLearningRate"]

@@ -1,12 +1,11 @@
 import abc
 import logging
-import random
 
 from tqdm.auto import tqdm
-from mlworkflow import SideRunner, lazyproperty, TransformedDataset, PickledDataset
+from mlworkflow import SideRunner, lazyproperty
 
 from .dataset import Subset, SubsetType
-from .utils import find, ExperimentMode
+from .utils import ExperimentMode
 
 # pylint: disable=abstract-method
 
@@ -64,8 +63,8 @@ class BaseExperiment(metaclass=abc.ABCMeta):
 
     def batch_generator(self, subset: Subset, batch_size=None):
         batch_size = batch_size or self.batch_size
-        self.batch_count += len(subset.keys)//batch_size
-        for keys, batch in subset.dataset.batches(subset.keys, batch_size, drop_incomplete=True):
+        self.batch_count += len(subset)//batch_size
+        for keys, batch in subset.dataset.batches(subset.shuffled_keys(), batch_size, drop_incomplete=True):
             yield keys, {"batch_{}".format(k): v for k,v in batch.items()}
 
     @abc.abstractmethod

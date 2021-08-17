@@ -42,20 +42,20 @@ class Subset:
         self.type = type
         self.dataset = RobustBatchesDataset(dataset)
         self._keys = keys
+        self.keys = keys
         self.repetitions = repetitions
         self.desc = desc
         evolutive = self.type == SubsetType.TRAIN
         loop = None if evolutive else repetitions
-        self.get_keys = pseudo_random(evolutive=evolutive)(self.get_keys)
+        self.shuffled_keys = pseudo_random(evolutive=evolutive)(self.shuffled_keys)
         self.dataset.query_item = pseudo_random(loop=loop)(self.dataset.query_item)
 
-    def get_keys(self): # pylint: disable=method-hidden
-        keys = self._keys * self.repetitions
+    def shuffled_keys(self): # pylint: disable=method-hidden
+        keys = self.keys * self.repetitions
         return random.sample(keys, len(keys))
 
-    @property
-    def keys(self):
-        return self.get_keys()
+    def __len__(self):
+        return len(self.keys)*self.repetitions
 
 class DatasetSplitter():
     def __repr__(self):
@@ -89,7 +89,7 @@ class BasicDatasetSplitter(DatasetSplitter):
         training_keys   = keys[u2*l//100:]
 
         return {
-            "training": Subset("training", type=SubsetType.TRAIN, keys=training_keys, dataset=dataset),
-            "validation": Subset("validation", type=SubsetType.EVAL, keys=validation_keys, dataset=dataset),
-            "testing": Subset("testing", type=SubsetType.EVAL, keys=testing_keys, dataset=dataset),
+            "training": Subset("training", subset_type=SubsetType.TRAIN, keys=training_keys, dataset=dataset),
+            "validation": Subset("validation", subset_type=SubsetType.EVAL, keys=validation_keys, dataset=dataset),
+            "testing": Subset("testing", subset_type=SubsetType.EVAL, keys=testing_keys, dataset=dataset),
         }

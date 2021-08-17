@@ -96,7 +96,7 @@ class Job():
         # if gpu_index is not None:
         #     print(os.environ["CUDA_VISIBLE_DEVICES"])
         #     raise
-        project_name = os.path.splitext(os.path.basename(self.filename))[0]
+        project_name = runtime_cfg.get("project_name", os.path.splitext(os.path.basename(self.filename))[0])
         experiment_id = datetime.datetime.now().strftime("%Y%m%d_%H%M%S.%f")
         worker_id = self._get_worker_id(runtime_cfg.pop("worker_ids", None))
 

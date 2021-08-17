@@ -40,7 +40,7 @@ class TensorFlowModelWrapper(tf.keras.Model): # pylint: disable=abstract-method
 class TensorflowExperiment(BaseExperiment):
     run_options = None  # overwritten by callbacks
     run_metadata = None # overwritten by callbacks
-    weights_suffix = "_weights"
+    weights_formated_filename = "{epoch:04d}_weights"
     # def __init__(self, *args, **kwargs):
     #     tf.keras.backend.clear_session()
     #     super().__init__(*args, **kwargs)
@@ -66,7 +66,7 @@ class TensorflowExperiment(BaseExperiment):
         if filename == "auto":
             dirname = os.path.dirname(self.cfg["filename"])
             try:
-                filename = sorted(glob.glob(os.path.join(dirname, f"*{self.weights_suffix}.index")))[-1].replace(".index", "")
+                filename = sorted(glob.glob(os.path.join(dirname, "*.index")))[-1].replace(".index", "")
             except IndexError:
                 logging.error(f"Impossible to load weights in '{dirname}'. Use the 'filename' argument.")
                 return
