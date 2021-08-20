@@ -3,17 +3,17 @@ import ast
 import copy
 import datetime
 from enum import Enum
+import multiprocessing
+
 import itertools
 import logging
-import multiprocessing
 import os
 import time
-import threading
 
 import astunparse
 from mlworkflow import SideRunner, lazyproperty
 from experimentator import DummyExperiment
-from .utils import find, mkdir
+from .utils import find, mkdir, NestablePool
 from .callbacked_experiment import FailedTrainingError
 # pylint: disable=logging-fstring-interpolation, logging-format-interpolation
 
@@ -51,6 +51,15 @@ def parse_config_file(config_filename):
         config = parse_config_str(f.read())
     return config
 
+def get_worker_id(*_):
+    time.sleep(.1)
+    return os.getpid()
+
+def set_cuda_visible_device(index):
+    time.sleep(.1)
+    os.environ["CUDA_VISIBLE_DEVICES"] = os.environ["CUDA_VISIBLE_DEVICES"].split(',')[index]
+
+
 class JobStatus(Enum):
     TODO = 0
     BUSY = 1
@@ -84,21 +93,10 @@ class Job():
             self.config["experiment_type"].append(DummyExperiment)
         return type("Exp", tuple(self.config["experiment_type"][::-1]), {})(self.config)
 
-    @staticmethod
-    def _get_worker_id(worker_ids):
-        if not worker_ids:
-            return None
-        worker_id = worker_ids[threading.get_ident()]
-        threading.current_thread().name = str(worker_id)
-        return worker_id
-
-    def run(self, epochs, keep=True, **runtime_cfg): # gpu_index=None,
-        # if gpu_index is not None:
-        #     print(os.environ["CUDA_VISIBLE_DEVICES"])
-        #     raise
+    def run(self, epochs, keep=True, worker_ids=None, **runtime_cfg):
         project_name = runtime_cfg.get("project_name", os.path.splitext(os.path.basename(self.filename))[0])
         experiment_id = datetime.datetime.now().strftime("%Y%m%d_%H%M%S.%f")
-        worker_id = self._get_worker_id(runtime_cfg.pop("worker_ids", None))
+        worker_index = worker_ids[get_worker_id()] if worker_ids else 0
 
         # Update config tree with runtime config
         unoverwritten = self.update_ast(**runtime_cfg, epochs=epochs)
@@ -113,7 +111,7 @@ class Job():
             f.write(self.config_str)
 
         # Add run and project names
-        self.config.update(project_name=project_name, experiment_id=experiment_id, worker_id=worker_id, folder=folder, dummy=self.dummy)
+        self.config.update(project_name=project_name, experiment_id=experiment_id, worker_index=worker_index, folder=folder, dummy=self.dummy)
 
         # Launch training
         try:
@@ -136,6 +134,7 @@ class Job():
             del self.exp
 
 class ExperimentManager():
+    side_runner = None
     def __init__(self, filename, logfile=None, num_workers=0, dummy=False, **grid_search):
         self.logger = logging.getLogger("experimentator")
         if logfile:
@@ -144,8 +143,11 @@ class ExperimentManager():
             handler.setLevel(logging.INFO if num_workers > 0 else logging.DEBUG)
             self.logger.addHandler(handler)
         self.logger.setLevel(logging.INFO if num_workers > 0 else logging.DEBUG)
-        threading.current_thread().name = "main"
-        self.side_runner = SideRunner(thread_count=num_workers) if num_workers > 0 else None
+        #threading.current_thread().name = "main"
+        if num_workers > 0:
+            self.side_runner = SideRunner(num_workers, impl=multiprocessing.Pool)#, impl=NestablePool)
+            if "CUDA_VISIBLE_DEVICES" in os.environ and len(os.environ["CUDA_VISIBLE_DEVICES"].split(",")) == num_workers and num_workers > 1:
+                self.side_runner.pool.map(set_cuda_visible_device, range(len(self.side_runner)))
 
         with open(find(filename)) as f:
             tree = ast.parse(f.read())
@@ -154,21 +156,20 @@ class ExperimentManager():
             self.jobs = [Job(filename, config_tree=tree, dummy=dummy)]
         else:
             self.jobs = []
+            unoverwritten = {}
             for grid_sample in product_kwargs(**grid_search):
                 job = Job(filename, config_tree=copy.deepcopy(tree), dummy=dummy, grid_sample=grid_sample)
-                unoverwritten = job.update_ast(**grid_sample) # dict makes a copy
+                unoverwritten.update(**job.update_ast(**grid_sample))
                 self.jobs.append(job)
             if unoverwritten:
                 self.logger.warning("Un-overwritten kwargs: {}".format(list(unoverwritten.keys())))
 
     @lazyproperty
     def worker_ids(self):
-        def f(x):
-            time.sleep(.1)
-            return threading.get_ident(), x
         if not self.side_runner:
-            return dict({f(0)})
-        return dict(self.side_runner.pool.map(f, range(self.side_runner.thread_count), 1))
+            return {get_worker_id():0}
+        seq = range(len(self.side_runner))
+        return dict(zip(self.side_runner.pool.map(get_worker_id, seq), seq))
 
     def execute(self, epochs, **runtime_cfg):
         self.logger.info(f"Runtime config: {runtime_cfg}")
@@ -207,7 +208,8 @@ def main():
     for kwarg in [kwarg for kwargs in args.kwargs or [[]] for kwarg in kwargs]: # Flattened appended kwargs
         exec(kwarg, None, kwargs) # pylint: disable=exec-used
 
-    manager = ExperimentManager(args.filename, logfile=args.logfile, dummy=args.dummy, **grid)
+    workers = 0 if args.workers <= 0 else args.workers
+    manager = ExperimentManager(args.filename, logfile=args.logfile, num_workers=workers, dummy=args.dummy, **grid)
     manager.execute(args.epochs, **kwargs)
 
 

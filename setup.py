@@ -14,7 +14,7 @@ setup(
         'console_scripts': ['experiment=experimentator:main'],
     },
     install_requires=[
-        "mlworkflow>=0.3.9",
+        "mlworkflow>=0.3.10",
         "dill",
         "numpy",
         "matplotlib",
