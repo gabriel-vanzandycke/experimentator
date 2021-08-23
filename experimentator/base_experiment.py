@@ -103,8 +103,8 @@ class BaseExperiment(metaclass=abc.ABCMeta):
         self.batch_count = 0  # required
         for subset_name, subset in self.subsets.items():
             assert subset.keys, "Empty subset is not allowed because it would require to adapt all callacks: {}".format(subset_name)
-            eval_frequency = self.cfg.get("eval_frequency", 1)
-            if eval_frequency and (epoch % eval_frequency) == 0:
+            eval_epochs = self.cfg.get("eval_epochs", None)
+            if eval_epochs is None or epoch in eval_epochs:
                 mode = ExperimentMode.EVAL
             elif subset.type == SubsetType.TRAIN:
                 mode = ExperimentMode.TRAIN
