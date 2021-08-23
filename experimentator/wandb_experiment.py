@@ -26,8 +26,8 @@ class LogStateWandB(StateLogger):
         self.initialized = True
         return run
     def __del__(self):
-        if self.initialized
-            wandb.finish()
+        if self.initialized:
+            self.wandb_run.finish()
     def on_epoch_end(self, state, **_):
         report = {}
         for key, data in state.items():
