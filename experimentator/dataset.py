@@ -36,10 +36,10 @@ class SubsetType(IntFlag):
 # This object is defined both in here and in dataset-utilities repository
 # Any change here should be reported in dataset-utilities as well
 class Subset:
-    def __init__(self, name: str, type: SubsetType, dataset: Dataset, keys, repetitions=1, desc=None):
-        assert isinstance(keys, (tuple, list))
+    def __init__(self, name: str, subset_type: SubsetType, dataset: Dataset, keys, repetitions=1, desc=None):
+        assert isinstance(keys, (tuple, list)), f"Received instance of {type(keys)} for subset {name}"
         self.name = name
-        self.type = type
+        self.type = subset_type
         self.dataset = RobustBatchesDataset(dataset)
         self._keys = keys
         self.keys = keys
