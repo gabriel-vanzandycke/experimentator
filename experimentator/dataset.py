@@ -5,7 +5,7 @@ import random
 import numpy as np
 
 from mlworkflow import Dataset
-from pseudo_random import pseudo_random, method # pylint: disable=unused-import
+from aleatorpy import pseudo_random, method # pylint: disable=unused-import
 
 class RobustBatchesDataset(Dataset):
     def __init__(self, parent):
