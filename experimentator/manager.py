@@ -208,8 +208,8 @@ def main():
     for kwarg in [kwarg for kwargs in args.kwargs or [[]] for kwarg in kwargs]: # Flattened appended kwargs
         exec(kwarg, None, kwargs) # pylint: disable=exec-used
 
-    workers = 0 if args.workers <= 0 else args.workers
-    manager = ExperimentManager(args.filename, logfile=args.logfile, num_workers=workers, dummy=args.dummy, **grid)
+    num_subprocesses = 0 if args.workers <= 1 else args.workers
+    manager = ExperimentManager(args.filename, logfile=args.logfile, num_workers=num_subprocesses, dummy=args.dummy, **grid)
     manager.execute(args.epochs, **kwargs)
 
 
