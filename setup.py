@@ -21,6 +21,7 @@ setup(
         "ipywidgets",
         "tqdm",
         "IPython",
-        "pandas"
+        "pandas",
+        "aleatorpy"
     ],
 )
