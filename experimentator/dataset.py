@@ -1,7 +1,7 @@
 import abc
+import dataclasses
 from enum import IntFlag
 import random
-
 import numpy as np
 
 from mlworkflow import Dataset
@@ -57,16 +57,12 @@ class Subset:
     def __len__(self):
         return len(self.keys)*self.repetitions
 
-class DatasetSplitter():
-    def __repr__(self):
-        attrs = [f"{k}={v}" for k,v in self.__dict__.items() if not k.startswith("_")]
-        return f"{self.__class__.__name__}({', '.join(attrs)})"
-
-class BasicDatasetSplitter(DatasetSplitter):
-    def __init__(self, validation_pc=15, testing_pc=15):
-        assert validation_pc + testing_pc < 100
-        self.validation_pc = validation_pc
-        self.testing_pc = testing_pc
+@dataclasses.dataclass
+class BasicDatasetSplitter:
+    validation_pc: int = 15
+    testing_pc: int = 15
+    def __post_init__(self):
+        assert self.validation_pc + self.testing_pc < 100
 
     def __call__(self, dataset, fold=0):
         keys = list(dataset.keys.all())

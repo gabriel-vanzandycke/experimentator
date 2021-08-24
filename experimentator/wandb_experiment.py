@@ -19,7 +19,7 @@ class LogStateWandB(StateLogger):
             project=self.project_name,
             reinit=True,
             config=self.config,
-            settings=wandb.Settings(show_emoji=False),
+            settings=wandb.Settings(show_emoji=False, _save_requirements=False),
             mode=self.mode,
         )
         run.name = self.run_name
