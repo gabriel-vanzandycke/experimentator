@@ -1,10 +1,10 @@
-import abc
 import dataclasses
 from enum import IntFlag
 import random
 import numpy as np
 
 from mlworkflow import Dataset
+from mlworkflow.datasets import batchify
 from aleatorpy import pseudo_random, method # pylint: disable=unused-import
 
 class RobustBatchesDataset(Dataset):
