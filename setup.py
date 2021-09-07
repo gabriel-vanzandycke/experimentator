@@ -22,6 +22,11 @@ setup(
         "tqdm",
         "IPython",
         "pandas",
-        "aleatorpy"
+        "aleatorpy",
+        "python-constraint"
     ],
+    extras_requires={
+        "tensorflow": ["tensorflow>=2.4"],
+        "wandb": ["wandb>=0.12.0"]
+    }
 )
