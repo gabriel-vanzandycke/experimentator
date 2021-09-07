@@ -1,6 +1,6 @@
 import io
 import logging
-from mlworkflow import lazyproperty
+from functools import cached_property
 from .base_experiment import BaseExperiment
 from .utils import insert_suffix
 
@@ -16,7 +16,7 @@ class TqdmToLogger(io.StringIO):
         self.logger.log(self.level, self.buffer)
 
 class LoggingExperiment(BaseExperiment):
-    @lazyproperty
+    @cached_property
     def logger(self):
         identity = self.cfg.get("worker_id", None)
         suffix = ".{}".format(identity) if identity is not None else ""

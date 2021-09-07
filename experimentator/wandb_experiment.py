@@ -1,6 +1,6 @@
 import os
 import pandas
-from mlworkflow import lazyproperty
+from functools import cached_property
 from experimentator import StateLogger
 import wandb
 
@@ -13,7 +13,7 @@ class LogStateWandB(StateLogger):
         self.criterion_metric = criterion_metric
         self.mode = mode
         self.initialized = False
-    @lazyproperty
+    @cached_property
     def wandb_run(self):
         run = wandb.init(
             project=self.project_name,

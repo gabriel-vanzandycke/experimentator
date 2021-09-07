@@ -2,7 +2,7 @@ import abc
 import json
 import os
 import types
-from mlworkflow import lazyproperty
+from functools import cached_property
 from .callbacked_experiment import Callback
 from .utils import DataCollector
 
@@ -22,7 +22,7 @@ from .utils import DataCollector
 
 
 # class LoggedExperiment(BaseExperiment):
-#     @lazyproperty
+#     @cached_property
 #     def logger(self):
 #         self.cfg["experiment_id"] = datetime()["dt"]
 #         filename = self.cfg.get("logger_filename", f"{self.cfg['filename']}_{{}}.dcp").format(self.cfg["experiment_id"])
@@ -77,19 +77,19 @@ from .utils import DataCollector
 
 
 # class NotebookExperiment(LoggedExperiment):  # pylint: disable=abstract-method
-#     @lazyproperty
+#     @cached_property
 #     def tqdm_output(self):
 #         output = Output()
 #         display.display(output)
 #         return output
 
-#     @lazyproperty
+#     @cached_property
 #     def plot_output(self):
 #         output = Output()
 #         display.display(output)
 #         return output
 
-#     @lazyproperty
+#     @cached_property
 #     def draw_output(self):
 #         output = Output()
 #         display.display(output)

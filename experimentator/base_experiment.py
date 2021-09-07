@@ -1,8 +1,9 @@
 import abc
+from functools import cached_property
 import logging
 
 from tqdm.auto import tqdm
-from mlworkflow import SideRunner, lazyproperty
+from mlworkflow import SideRunner
 
 from .dataset import Subset, SubsetType
 from .utils import ExperimentMode
@@ -26,7 +27,7 @@ class BaseExperiment(metaclass=abc.ABCMeta):
     def get(self, key, default):
         return self.cfg.get(key, default)
 
-    @lazyproperty
+    @cached_property
     def logger(self):
         return logging.getLogger()
 
@@ -46,11 +47,11 @@ class BaseExperiment(metaclass=abc.ABCMeta):
     def epochs(self):
         return 0 # can be overwritten in a LoggedExperiment to continue a loaded traning
 
-    @lazyproperty
+    @cached_property
     def grid_sample(self):
         return self.cfg["grid_sample"]
 
-    @lazyproperty
+    @cached_property
     def subsets(self):
         return self.cfg["subsets"]
 
@@ -122,7 +123,7 @@ class BaseExperiment(metaclass=abc.ABCMeta):
         return self.batch_infer(data)
 
 class AsyncExperiment(BaseExperiment):
-    @lazyproperty
+    @cached_property
     def side_runner(self):
         return SideRunner()
 

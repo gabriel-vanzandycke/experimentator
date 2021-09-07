@@ -1,21 +1,15 @@
 from dataclasses import dataclass
-import os
+from enum import IntFlag
+from functools import cached_property
 import glob
 import logging
-from enum import IntFlag
+import os
+
 import numpy as np
 import tensorflow as tf
 from tensorflow.python.client import timeline # pylint: disable=no-name-in-module, unused-import
-from experimentator import BaseExperiment, ExperimentMode, Callback, SubsetType
-from mlworkflow import lazyproperty
 
-#os.environ['AUTOGRAPH_VERBOSITY'] = "5"
-#tf.config.set_soft_device_placement(False)
-try:
-    for device in tf.config.list_physical_devices('GPU'):
-        tf.config.experimental.set_memory_growth(device, enable=True)
-except RuntimeError:
-    print("Physical devices already initialized. Impossible to set memory growth.", file=os.sys.stderr)
+from experimentator import BaseExperiment, ExperimentMode, Callback, SubsetType
 
 def print_tensor(x, message=None):
     def print_function(x):
@@ -46,19 +40,19 @@ class TensorflowExperiment(BaseExperiment):
     #     super().__init__(*args, **kwargs)
     #     print(f"clearing session for {self.grid_sample}")
 
-    @lazyproperty
+    @cached_property
     def metrics(self):
         return {}
 
-    @lazyproperty
+    @cached_property
     def outputs(self):
         return {}
 
-    @lazyproperty
+    @cached_property
     def device(self):
         return tf.config.list_logical_devices()[-1].name
 
-    @lazyproperty
+    @cached_property
     def optimizer(self):
         return self.cfg["optimizer"]
 
@@ -82,11 +76,11 @@ class TensorflowExperiment(BaseExperiment):
     def set_learning_rate(self, learning_rate):
         self.optimizer.lr = learning_rate
 
-    # @lazyproperty
+    # @cached_property
     # def checkpoint(self):
     #     tf.train.Checkpoint(step=tf.Variable(1), optimizer=self.optimizer, net=self.train_model, iterator=iter(self.batch_generator))
 
-    # @lazyproperty
+    # @cached_property
     # def manager(self):
     #     checkpoint_dir = os.path.join()
     #     tf.train.CheckpointManager(self.checkpoint, )
@@ -97,7 +91,7 @@ class TensorflowExperiment(BaseExperiment):
             _ = self.inputs
             del self.__data
 
-    @lazyproperty
+    @cached_property
     def inputs(self):
         try:
             data = self.__data # temporary variable holding the dictionary of batched data
@@ -118,11 +112,11 @@ class TensorflowExperiment(BaseExperiment):
             self.logger.debug("Skipped inputs: " + ", ".join(["{}({})".format(name, data[name]) for name in skipped]))
         return inputs
 
-    @lazyproperty
+    @cached_property
     def chunk_processors(self):
         return [CP for CP in self.cfg["chunk_processors"] if CP is not None] # cannot be a dict in case a ChunkProcessor is used twice
 
-    @lazyproperty
+    @cached_property
     def chunk(self):
         chunk = self.inputs.copy() # copies the dictionary, but not its values (passed by reference) to be used again in the model instanciation
         for chunk_processor in self.chunk_processors:
@@ -130,52 +124,23 @@ class TensorflowExperiment(BaseExperiment):
                 chunk_processor(chunk)
         return chunk
 
-    @lazyproperty
+    @cached_property
     def train_model(self):
         model = TensorFlowModelWrapper(self.inputs, {"loss": self.chunk["loss"]})
         model.compile(optimizer=self.optimizer)
         return model
 
-    @lazyproperty
+    @cached_property
     def eval_model(self):
         model = TensorFlowModelWrapper(self.inputs, {"loss": self.chunk["loss"], **self.metrics, **self.outputs})
         model.compile(optimizer=self.optimizer)
         return model
 
-    @lazyproperty
+    @cached_property
     def infer_model(self):
         model = TensorFlowModelWrapper(self.inputs, self.outputs)
         model.compile()
         return model
-
-    # === START ===
-    # @tf.function
-    # def _batch_train(self, inputs):
-    #     with tf.GradientTape() as tape:
-    #         results = self.train_model(inputs, training=True)
-    #     grads = tape.gradient(results["loss"], self.train_model.trainable_weights)
-    #     self.optimizer.apply_gradients(zip(grads, self.train_model.trainable_weights))
-    #     return results
-
-    # def batch_train(self, data, mode=None):
-    #     self.__init_inputs(data)
-    #     _ = self.train_model # forces lazyproperties to be created as attributes before wrapping with tf.function decorator
-    #     return self._batch_train(self.select_data(data))
-    # === STOP ===
-
-    # @staticmethod
-    # @tf.function
-    # def _train_step(inputs, model, optimizer):
-    #     with tf.GradientTape() as tape:
-    #         results = model(inputs, training=True)
-    #     grads = tape.gradient(results["loss"], model.trainable_weights)
-    #     optimizer.apply_gradients(zip(grads, model.trainable_weights))
-    #     return results
-
-    # @staticmethod
-    # @tf.function
-    # def _eval_step(inputs, model):
-    #     return model(inputs, training=False)
 
     def select_data(self, data):
         return {k:v for k,v in data.items() if k in self.inputs}

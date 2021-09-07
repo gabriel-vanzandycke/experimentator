@@ -1,9 +1,10 @@
+from functools import cached_property
 import os
 import glob
 import logging
 import numpy as np
 import torch
-from .base_experiment import BaseExperiment, lazyproperty, ExperimentMode
+from .base_experiment import BaseExperiment, ExperimentMode
 from .callbacked_experiment import Callback
 
 from .utils import SubsetType
@@ -15,19 +16,19 @@ class TorchExperiment(BaseExperiment):
     #weights_suffix = "_weights"
     weights_formated_filename = "{:04d}_weights"
 
-    @lazyproperty
+    @cached_property
     def metrics(self):
         return {}
 
-    @lazyproperty
+    @cached_property
     def outputs(self):
         return {}
 
-    @lazyproperty
+    @cached_property
     def device(self):
         return 
 
-    @lazyproperty
+    @cached_property
     def optimizer(self):
         return self.cfg["optimizer"]
 
@@ -51,11 +52,11 @@ class TorchExperiment(BaseExperiment):
     def set_learning_rate(self, learning_rate):
         self.optimizer.lr = learning_rate
 
-    # @lazyproperty
+    # @cached_property
     # def checkpoint(self):
     #     tf.train.Checkpoint(step=tf.Variable(1), optimizer=self.optimizer, net=self.train_model, iterator=iter(self.batch_generator))
 
-    # @lazyproperty
+    # @cached_property
     # def manager(self):
     #     checkpoint_dir = os.path.join()
     #     tf.train.CheckpointManager(self.checkpoint, )
@@ -66,7 +67,7 @@ class TorchExperiment(BaseExperiment):
             _ = self.inputs
             del self.__data
 
-    @lazyproperty
+    @cached_property
     def inputs(self):
         try:
             data = self.__data # temporary variable holding the dictionary of batched data
@@ -88,11 +89,11 @@ class TorchExperiment(BaseExperiment):
             self.logger.debug("Skipped inputs: " + ", ".join(["{}({})".format(name, data[name]) for name in skipped]))
         return inputs
 
-    @lazyproperty
+    @cached_property
     def chunk_processors(self):
         return [CP for CP in self.cfg["chunk_processors"] if CP is not None] # cannot be a dict in case a ChunkProcessor is used twice
 
-    @lazyproperty
+    @cached_property
     def chunk(self):
         chunk = self.inputs.copy() # copies the dictionary, but not its values (passed by reference) to be used again in the model instanciation
         for chunk_processor in self.chunk_processors:
@@ -100,19 +101,19 @@ class TorchExperiment(BaseExperiment):
                 chunk_processor(chunk)
         return chunk
 
-    @lazyproperty
+    @cached_property
     def train_model(self):
         model = TensorFlowModelWrapper(self.inputs, {"loss": self.chunk["loss"]})
         model.compile(optimizer=self.optimizer)
         return model
 
-    @lazyproperty
+    @cached_property
     def eval_model(self):
         model = TensorFlowModelWrapper(self.inputs, {"loss": self.chunk["loss"], **self.metrics, **self.outputs})
         model.compile(optimizer=self.optimizer)
         return model
 
-    @lazyproperty
+    @cached_property
     def infer_model(self):
         model = TensorFlowModelWrapper(self.inputs, self.outputs)
         model.compile()
