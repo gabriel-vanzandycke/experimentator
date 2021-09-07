@@ -3,6 +3,7 @@ import ast
 import copy
 import datetime
 from enum import Enum
+from functools import cached_property
 import multiprocessing
 
 import itertools
@@ -11,7 +12,7 @@ import os
 import time
 
 import astunparse
-from mlworkflow import SideRunner, lazyproperty
+from mlworkflow import SideRunner
 from experimentator import DummyExperiment
 from .utils import find, mkdir, NestablePool
 from .callbacked_experiment import FailedTrainingError
@@ -81,13 +82,13 @@ class Job():
     def config_str(self):
         return astunparse.unparse(self.config_tree)
 
-    @lazyproperty
+    @cached_property
     def config(self):
         config = {}
         exec(self.config_str, None, config) # pylint: disable=exec-used
         return {**config, "grid_sample": self.grid_sample, "filename": self.filename}
 
-    @lazyproperty
+    @cached_property
     def exp(self):
         if self.dummy:
             self.config["experiment_type"].append(DummyExperiment)
@@ -164,7 +165,7 @@ class ExperimentManager():
             if unoverwritten:
                 self.logger.warning("Un-overwritten kwargs: {}".format(list(unoverwritten.keys())))
 
-    @lazyproperty
+    @cached_property
     def worker_ids(self):
         if not self.side_runner:
             return {get_worker_id():0}
