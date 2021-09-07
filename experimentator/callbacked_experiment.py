@@ -10,7 +10,7 @@ import types
 
 import constraint as cst
 import numpy as np
-from mlworkflow import lazyproperty
+from functools import cached_property
 
 from experimentator import BaseExperiment, SubsetType, ExperimentMode, DataCollector
 
@@ -63,12 +63,20 @@ class CallbackedExperiment(BaseExperiment): # pylint: disable=abstract-method
             raise BaseException("Impossible to solve")
         return [callbacks[label] for label, precedence in sorted(solution.items(), key=lambda kv: kv[1])]
 
-    @lazyproperty
+    @cached_property
     def callbacks(self):
         callbacks = self.sort_callbacks(self.cfg["callbacks"])
-        for cb in callbacks:
-            if getattr(cb, "init", None):
-                cb.init(exp=self)
+        try:
+            for callback in callbacks:
+                if getattr(callback, "init", None):
+                    callback.init(exp=self)
+        except:
+            logging.error(f"Error initializing '{callback}'")
+            raise
+        #     message = []
+        #     list(map(lambda cb: message.append(("  * " if cb == callback else "   ")+ str(cb)), callbacks))
+        #     print("\n".join(message))
+        #     raise
         return callbacks
 
     def fire(self, event, mode=ExperimentMode.ALL):
@@ -85,7 +93,7 @@ class CallbackedExperiment(BaseExperiment): # pylint: disable=abstract-method
             logging.error(f"Error calling '{event}' after:\n    {cb_messages}")
             raise
 
-    @lazyproperty
+    @cached_property
     def metrics(self):
         """ Describes network's outputs that should be saved in the current state
         """
@@ -137,7 +145,7 @@ class StateLogger(Callback, metaclass=abc.ABCMeta):
     excluded_keys = ["cycle_name", "cycle_type", "mode"]
     def init(self, exp):
         self.project_name = exp.get("project_name", "unknown_project")
-        self.run_name = ", ".join([f"{k}={v}" for k,v in exp.grid_sample.items()]) or "nil"
+        self.run_name = ", ".join([f"{k}={v}" for k,v in exp.grid_sample.items()]) or exp.get("run_name", "nil")
         self.config = {k:v for k,v in exp.cfg.items() if not isinstance(v, types.ModuleType)} # lists and dictionnaries don't get printed correctly
 
         grid_sample = dict(exp.grid_sample) # copies the original dictionary
@@ -148,7 +156,7 @@ class StateLogger(Callback, metaclass=abc.ABCMeta):
         raise NotImplementedError()
 
 class LogStateDataCollector(StateLogger):
-    @lazyproperty
+    @cached_property
     def logger(self):
         filename = os.path.join(self.config.get("folder", "."), "history.dcp")
         return DataCollector(filename)
