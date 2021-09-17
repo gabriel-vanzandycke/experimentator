@@ -25,14 +25,14 @@ def product_kwargs(**kwargs):
         raise SyntaxError(f"Error parsing: {kwargs}") from e
     yield from [dict(kv) for kv in itertools.product(*kvs)]
 
-def update_ast(tree, overwrite):
+def update_ast(tree, overwrite, allow_double_assignation=False, allow_tuple_assignation=False):
     met_targets = []
     for node in tree.body:
         if not isinstance(node, ast.Assign):
             continue
         for target in node.targets:
-            assert isinstance(target, ast.Name), "Tuple assignation is not allowed in config files (e.g. `a,b=1,2`). Impossible to overwrite '{}' of type '{}'".format(target.id, type(target))
-            assert target.id not in met_targets, "Double assignation is not allowed in config files. '{}' seems to be assigned twice.".format(target.id)
+            assert allow_tuple_assignation or isinstance(target, ast.Name), "Tuple assignation is not allowed in config files (e.g. `a,b=1,2`). Impossible to overwrite '{}' of type '{}'".format(target.id, type(target))
+            assert allow_double_assignation or target.id not in met_targets, "Double assignation is not allowed in config files. '{}' seems to be assigned twice.".format(target.id)
             if target.id in overwrite:
                 node.value = ast.parse(repr(overwrite.pop(target.id))).body[0].value
                 met_targets.append(target.id)
@@ -60,6 +60,15 @@ def set_cuda_visible_device(index):
     time.sleep(.1)
     os.environ["CUDA_VISIBLE_DEVICES"] = os.environ["CUDA_VISIBLE_DEVICES"].split(',')[index]
 
+def build_experiment(config_filename, **kwargs):
+
+    with open(find(config_filename)) as f:
+        tree = ast.parse(f.read())
+    update_ast(tree, dict({**kwargs, "filename": config_filename}), allow_double_assignation=True)
+    config_str = astunparse.unparse(tree)
+
+    config = parse_config_str(config_str)
+    return type("Exp", tuple(config["experiment_type"][::-1]), {})(config)
 
 class JobStatus(Enum):
     TODO = 0
