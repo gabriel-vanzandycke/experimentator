@@ -30,11 +30,14 @@ class TensorFlowModelWrapper(tf.keras.Model): # pylint: disable=abstract-method
     @tf.function
     def test_step(self, inputs):
         return self(inputs, training=False)
+    def load_weights(self, *args, **kwargs):
+        super().load_weights(*args, **kwargs).expect_partial()
 
 class TensorflowExperiment(BaseExperiment):
     run_options = None  # overwritten by callbacks
     run_metadata = None # overwritten by callbacks
     weights_formated_filename = "{epoch:04d}_weights"
+    weights_file = None
     # def __init__(self, *args, **kwargs):
     #     tf.keras.backend.clear_session()
     #     super().__init__(*args, **kwargs)
@@ -65,7 +68,7 @@ class TensorflowExperiment(BaseExperiment):
                 logging.error(f"Impossible to load weights in '{dirname}'. Use the 'filename' argument.")
                 return
         logging.info(f"loading '{filename}'")
-        self.train_model.load_weights(filename)
+        self.weights_file = filename
 
     def save_weights(self, filename):
         self.train_model.save_weights(filename)
@@ -121,25 +124,36 @@ class TensorflowExperiment(BaseExperiment):
         chunk = self.inputs.copy() # copies the dictionary, but not its values (passed by reference) to be used again in the model instanciation
         for chunk_processor in self.chunk_processors:
             with tf.name_scope(chunk_processor.__class__.__name__):
-                chunk_processor(chunk)
+                try:
+                    chunk_processor(chunk)
+                except BaseException as e:
+                    if not self.cfg.get('robust', False):
+                        raise e
+                    logging.warning(f"{chunk_processor} skipped because of the following error: {e}")
         return chunk
 
     @cached_property
     def train_model(self):
         model = TensorFlowModelWrapper(self.inputs, {"loss": self.chunk["loss"]})
         model.compile(optimizer=self.optimizer)
+        if self.weights_file:
+            model.load_weights(self.weights_file)
         return model
 
     @cached_property
     def eval_model(self):
-        model = TensorFlowModelWrapper(self.inputs, {"loss": self.chunk["loss"], **self.metrics, **self.outputs})
+        model = TensorFlowModelWrapper(self.inputs, {"loss": self.chunk["loss"], **self.metrics}) # outputs are removed to accelerate evaluation during training. A dedicated eval+infer model should be used to perform both.
         model.compile(optimizer=self.optimizer)
+        if self.weights_file:
+            model.load_weights(self.weights_file)
         return model
 
     @cached_property
     def infer_model(self):
         model = TensorFlowModelWrapper(self.inputs, self.outputs)
         model.compile()
+        if self.weights_file:
+            model.load_weights(self.weights_file)
         return model
 
     def select_data(self, data):
