@@ -13,6 +13,15 @@ class CastFloat(ChunkProcessor):
             if tensor_name in chunk:
                 chunk[tensor_name] = tf.cast(chunk[tensor_name], tf.float32)
 
+class Cast(ChunkProcessor):
+    def __init__(self, tensor_names, dtype):
+        self.tensor_names = [tensor_names] if isinstance(tensor_names, str) else tensor_names
+        self.dtype = dtype
+    def __call__(self, chunk):
+        for tensor_name in self.tensor_names:
+            if tensor_name in chunk:
+                chunk[tensor_name] = tf.cast(chunk[tensor_name], self.dtype)
+
 class Normalize(ChunkProcessor):
     def __init__(self, tensor_names):
         self.tensor_names = [tensor_names] if isinstance(tensor_names, str) else tensor_names
