@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from enum import IntFlag
-from functools import cached_property
+from mlworkflow import lazyproperty as cached_property
 import glob
 import logging
 import os
@@ -191,33 +191,50 @@ class EpochExponentialMovingAverage(Callback):
             var.assign(self.ema.average(var))
         self.ema = None
 
-class TensorFlowProfilerExperiment(TensorflowExperiment):
-    def run_batch(self, subset, batch_id, *args, **kwargs):
-        with tf.profiler.experimental.Trace(subset.name, step_num=batch_id, _r=1):
-            result = super().run_batch(*args, subset=subset, batch_id=batch_id, **kwargs)
-        return result
 
 @dataclass
 class ProfileCallback(Callback):
-    batch_start: int = 1,
-    batch_stop: int = 2,
+    """ Enables profiling process between `batch_start` and `batch_stop` batches.
+        Investigate with `tensorboard --logdir logdir --port 8020 --host `myip` --load_fast=false`
+    """
+    batch_start: int = 1
+    batch_stop: int = 4
     mode: (IntFlag, int) = ExperimentMode.ALL
-    # def __init__(self, exp):
-    #     self.writer = tf.summary.create_file_writer("logdir")
-    #     tf.debugging.experimental.enable_dump_debug_info("logdir", tensor_debug_mode="FULL_HEALTH", circular_buffer_size=-1)
     def on_batch_begin(self, mode, epoch, batch, **_):
-        if self.batch_start <= batch < self.batch_stop and mode & self.mode:
+        if self.batch_start == batch:
+            print("="*100 + "\nStart profiling\n" + "="*100)
             tf.profiler.experimental.start("logdir")
     def on_batch_end(self, mode, batch, **_):
-        if self.batch_start <= batch < self.batch_stop and mode & self.mode:
+        if batch == self.batch_stop:
             tf.profiler.experimental.stop()
-    # def on_batch_begin(self, epoch, **_):
-    #     if 2 <= epoch < 4:
-    #         tf.summary.trace_on(graph=True, profiler=True)
-    # def on_batch_end(self, epoch, batch, **_):
-    #     if 2 <= epoch < 4:
-    #         with self.writer.as_default():
-    #             tf.summary.trace_export(name="on_batch_end_{}.{}".format(epoch, batch), step=0, profiler_outdir="logdir")
+            print("="*100 + "\nStop profiling\n" + "="*100)
+
+
+
+
+
+
+# class TensorFlowProfilerExperiment(TensorflowExperiment):
+#     def run_batch(self, subset, batch_id, *args, **kwargs):
+#         with tf.profiler.experimental.Trace(subset.name, step_num=batch_id, _r=1):
+#             result = super().run_batch(*args, subset=subset, batch_id=batch_id, **kwargs)
+#         return result
+
+
+# @dataclass
+# class TraceCallback(Callback):
+#     logdir: str = "logdir"
+#     def __post_init__(self):
+#         self.writer = tf.summary.create_file_writer(self.logdir)
+#         tf.debugging.experimental.enable_dump_debug_info(self.logdir, tensor_debug_mode="FULL_HEALTH", circular_buffer_size=-1)
+#     def on_batch_begin(self, batch, **_):
+#         if 2 == batch:
+#             tf.summary.trace_on(graph=True, profiler=True)
+#     def on_batch_end(self, batch, epoch, **_):
+#         if batch == 10:
+#             with self.writer.as_default():
+#                 tf.summary.trace_export(name="on_batch_end_{}.{}".format(epoch, batch), step=0, profiler_outdir=self.logdir)
+
 #     def freeze(self, filename, output_nodes_names=None):
 #         """Freezes the state of a session into a pruned computation graph.
 #         Creates a new computation graph where variable nodes are replaced by
