@@ -10,7 +10,7 @@ import types
 
 import constraint as cst
 import numpy as np
-from functools import cached_property
+from mlworkflow import lazyproperty as cached_property
 
 from experimentator import BaseExperiment, SubsetType, ExperimentMode, DataCollector
 
@@ -18,7 +18,6 @@ from experimentator import BaseExperiment, SubsetType, ExperimentMode, DataColle
 
 class FailedTrainingError(BaseException):
     pass
-
 
 @dataclass
 class Callback():
@@ -102,7 +101,7 @@ class CallbackedExperiment(BaseExperiment): # pylint: disable=abstract-method
     def run_batch(self, mode, batch_id, *args, **kwargs): # pylint: disable=signature-differs
         self.state["batch"] = batch_id
         self.fire("batch_begin", mode=mode)
-        result = super().run_batch(mode=mode, batch_id=batch_id, *args, **kwargs)
+        keys, data, result = super().run_batch(mode=mode, batch_id=batch_id, *args, **kwargs)
         self.state.update(**{k:v for k,v in result.items() if k in list(self.metrics.keys())+["loss"]})
         self.fire("batch_end", mode=mode)
         return result
@@ -134,12 +133,23 @@ class SaveWeights(Callback):
     def init(self, exp):
         self.exp = exp
     def on_epoch_end(self, epoch, **state):
+        # TODO: correct "best" strategy
         if     (self.strategy == "best" and (self.min_loss is None or state["training_loss"] < self.min_loss)) \
             or (self.strategy == "all"):
             self.min_loss = state.get("training_loss", None)
             filename = os.path.join(self.exp.folder, self.exp.weights_formated_filename.format(epoch=epoch))
             self.exp.save_weights(filename)
 
+@dataclass
+class LoadWeights(Callback):
+    folder: str
+    def init(self, exp):
+        self.exp = exp
+    def on_epoch_begin(self, epoch, **_):
+        filename = os.path.join(self.folder, self.exp.weights_formated_filename.format(epoch=epoch))
+        self.exp.eval_model.load_weights(filename)
+
+@dataclass
 class StateLogger(Callback, metaclass=abc.ABCMeta):
     after = ["GatherCycleMetrics", "MeasureTime", "SaveLearningRate"]
     excluded_keys = ["cycle_name", "cycle_type", "mode"]
@@ -181,14 +191,14 @@ class AccumulateBatchMetrics(Callback):
                 value = np.sum(state.pop(name), axis=0)
                 self.acc[name] = self.acc.setdefault(name, np.zeros_like(value)) + value
     def on_cycle_end(self, state, **_): # 'state' attribute in R/W
-        state.update(**self.acc) # allows augmenting metrics before gathering
+        state.update(**self.acc) # allows augmenting metrics before gathering cycle metrics
 
 @dataclass
 class AverageMetrics(Callback):
     after = ["AccumulateBatchMetrics"]
     before = ["GatherCycleMetrics"]
     patterns: list
-    def on_cycle_end(self, batch, state, **_):
+    def on_cycle_end(self, batch: int, state: dict, **_):
         for name in state:
             for pattern in self.patterns:
                 if re.fullmatch(pattern, name):

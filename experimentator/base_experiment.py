@@ -1,5 +1,5 @@
 import abc
-from functools import cached_property
+from mlworkflow import lazyproperty as cached_property
 import logging
 
 from tqdm.auto import tqdm
@@ -81,9 +81,9 @@ class BaseExperiment(metaclass=abc.ABCMeta):
     def run_batch(self, subset, batch_id, batch_generator, mode=ExperimentMode.ALL): # pylint: disable=unused-argument
         keys, data = next(batch_generator) # pylint: disable=unused-variable
         if subset.type == SubsetType.TRAIN:
-            return self.batch_train(data, mode)
+            return keys, data, self.batch_train(data, mode)
         elif subset.type == SubsetType.EVAL:
-            return self.batch_eval(data)
+            return keys, data, self.batch_eval(data)
         else:
             raise ValueError("Subset type should either be {} or {}".format(SubsetType.TRAIN, SubsetType.EVAL))
 
