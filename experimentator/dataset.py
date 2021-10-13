@@ -48,7 +48,7 @@ class Subset:
         evolutive = self.type == SubsetType.TRAIN
         loop = None if evolutive else repetitions
         self.shuffled_keys = pseudo_random(evolutive=evolutive)(self.shuffled_keys)
-        self.dataset.query_item = pseudo_random(loop=loop)(self.dataset.query_item)
+        self.dataset.query_item = pseudo_random(loop=loop, input_dependent=True)(self.dataset.query_item)
 
     def shuffled_keys(self): # pylint: disable=method-hidden
         keys = self.keys * self.repetitions
@@ -56,6 +56,33 @@ class Subset:
 
     def __len__(self):
         return len(self.keys)*self.repetitions
+
+class SubsetDataset(Dataset):
+    def __init__(self, name: str, subset_type: SubsetType, dataset: Dataset, keys, repetitions=1, desc=None):
+        assert isinstance(keys, (tuple, list)), f"Received instance of {type(keys)} for subset {name}"
+        self.name = name
+        self.type = subset_type
+        self.dataset = RobustBatchesDataset(dataset)
+        self._keys = keys
+        self.keys = keys
+        self.repetitions = repetitions
+        self.desc = desc
+        evolutive = self.type == SubsetType.TRAIN
+        loop = None if evolutive else repetitions
+        self.yield_keys = pseudo_random(evolutive=evolutive)(self.yield_keys)
+        self.query_item = pseudo_random(loop=loop, input_dependent=True)(self.dataset.query_item)
+
+    def yield_keys(self):
+        keys = self.keys * self.repetitions
+        yield from random.sample(keys, len(keys))
+
+    def query_item(self, key):
+        return self.dataset.query_item(key)
+
+    def __len__(self):
+        return len(self.keys)*self.repetitions
+
+
 
 @dataclasses.dataclass
 class BasicDatasetSplitter:
