@@ -3,7 +3,7 @@ import ast
 import copy
 import datetime
 from enum import Enum
-from functools import cached_property
+from mlworkflow import lazyproperty as cached_property
 import multiprocessing
 
 import itertools
@@ -31,11 +31,12 @@ def update_ast(tree, overwrite, allow_double_assignation=False, allow_tuple_assi
         if not isinstance(node, ast.Assign):
             continue
         for target in node.targets:
-            assert allow_tuple_assignation or isinstance(target, ast.Name), "Tuple assignation is not allowed in config files (e.g. `a,b=1,2`). Impossible to overwrite '{}' of type '{}'".format(target.id, type(target))
-            assert allow_double_assignation or target.id not in met_targets, "Double assignation is not allowed in config files. '{}' seems to be assigned twice.".format(target.id)
-            if target.id in overwrite:
-                node.value = ast.parse(repr(overwrite.pop(target.id))).body[0].value
-                met_targets.append(target.id)
+            if hasattr(target, "id"):
+                assert allow_tuple_assignation or isinstance(target, ast.Name), "Tuple assignation is not allowed in config files (e.g. `a,b=1,2`). Impossible to overwrite '{}' of type '{}'".format(target.id, type(target))
+                assert allow_double_assignation or target.id not in met_targets, "Double assignation is not allowed in config files. '{}' seems to be assigned twice.".format(target.id)
+                if target.id in overwrite:
+                    node.value = ast.parse(repr(overwrite.pop(target.id))).body[0].value
+                    met_targets.append(target.id)
     # Add remaining keys
     for key, value in overwrite.items():
         tree.body.append(ast.Assign([ast.Name(id=key, ctx=ast.Store())], ast.Constant(value, kind=None)))
