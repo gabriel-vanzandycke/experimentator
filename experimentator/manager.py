@@ -3,13 +3,14 @@ import ast
 import copy
 import datetime
 from enum import Enum
-from mlworkflow import lazyproperty as cached_property
-import multiprocessing
-
+from functools import cached_property
 import itertools
 import logging
+import multiprocessing
 import os
+import sys
 import time
+import traceback
 
 import astunparse
 from mlworkflow import SideRunner
@@ -45,7 +46,7 @@ def update_ast(tree, overwrite, allow_double_assignation=False, allow_tuple_assi
 
 def parse_config_str(config_str):
     config = {}
-    exec(config_str, None, config) # pylint: disable=exec-used
+    _exec(config_str, None, config, description="config string")
     return config
 
 def parse_config_file(config_filename):
@@ -71,6 +72,26 @@ def build_experiment(config_filename, **kwargs):
     config = parse_config_str(config_str)
     return type("Exp", tuple(config["experiment_type"][::-1]), {})(config)
 
+class InterpreterError(Exception): pass
+
+# from https://stackoverflow.com/a/28836286/1782553
+def _exec(cmd, globals=None, locals=None, description='source string'):
+    try:
+        exec(cmd, globals, locals) # pylint: disable=exec-used
+    except SyntaxError as err:
+        error_class = err.__class__.__name__
+        detail = err.args[0]
+        line_number = err.lineno
+    except BaseException as err:
+        error_class = err.__class__.__name__
+        detail = err.args[0]
+        cl, exc, tb = sys.exc_info() # pylint: disable=unused-variable
+        line_number = traceback.extract_tb(tb)[-1][1]
+    else:
+        return
+    raise InterpreterError("%s at line %d of %s: %s" % (error_class, line_number, description, detail))
+
+
 class JobStatus(Enum):
     TODO = 0
     BUSY = 1
@@ -95,7 +116,7 @@ class Job():
     @cached_property
     def config(self):
         config = {}
-        exec(self.config_str, None, config) # pylint: disable=exec-used
+        _exec(self.config_str, None, config, description="config")
         return {**config, "grid_sample": self.grid_sample, "filename": self.filename}
 
     @cached_property
@@ -213,11 +234,11 @@ def main():
 
     grid = {}
     for arg in args.grid or []:
-        exec(arg, None, grid) # pylint: disable=exec-used
+        _exec(arg, None, grid, description="grid item")
 
     kwargs = {}
     for kwarg in [kwarg for kwargs in args.kwargs or [[]] for kwarg in kwargs]: # Flattened appended kwargs
-        exec(kwarg, None, kwargs) # pylint: disable=exec-used
+        _exec(kwarg, None, kwargs, description="kwargs item")
 
     num_subprocesses = 0 if args.workers <= 1 else args.workers
     manager = ExperimentManager(args.filename, logfile=args.logfile, num_workers=num_subprocesses, dummy=args.dummy, **grid)
