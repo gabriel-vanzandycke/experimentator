@@ -4,6 +4,6 @@ from .base_experiment import BaseExperiment, AsyncExperiment, DummyExperiment
 from .dataset import BasicDatasetSplitter, SubsetType, Subset
 from .manager import ExperimentManager, parse_config_str, parse_config_file, build_experiment
 from .callbacked_experiment import Callback, CallbackedExperiment, MeasureTime, StopFailedTraining, \
-    AccumulateBatchMetrics, SaveLearningRate,  SaveWeights, StateLogger, LogStateDataCollector, GatherCycleMetrics, \
+    SaveLearningRate,  SaveWeights, StateLogger, LogStateDataCollector, GatherCycleMetrics, \
     AverageMetrics, LearningRateDecay, LearningRateWarmUp, PrintLoss, LoadWeights
 from .loggers import LoggingExperiment

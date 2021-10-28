@@ -78,13 +78,13 @@ class CallbackedExperiment(BaseExperiment): # pylint: disable=abstract-method
         #     raise
         return callbacks
 
-    def fire(self, event, mode=ExperimentMode.ALL):
+    def fire(self, event, state, mode=ExperimentMode.ALL):
         cb_messages = []
         try:
             for cb in self.callbacks:
                 if cb.when & mode:
-                    cb_messages.append(f"{cb}({list(self.state.keys())})")
-                    cb.fire(event=event, state=self.state)
+                    cb_messages.append(f"{cb}({list(state.keys())})")
+                    cb.fire(event=event, state=state)
         except FailedTrainingError:
             raise
         except:
@@ -92,51 +92,61 @@ class CallbackedExperiment(BaseExperiment): # pylint: disable=abstract-method
             logging.error(f"Error calling '{event}' after:\n    {cb_messages}")
             raise
 
-    @cached_property
-    def metrics(self):
-        """ Describes network's outputs that should be saved in the current state
-        """
-        return {}
-
     def run_batch(self, mode, batch_id, *args, **kwargs): # pylint: disable=signature-differs
-        self.state["batch"] = batch_id
-        self.fire("batch_begin", mode=mode)
+        state = dict(**self.state)
+        state["batch"] = batch_id
+        self.fire("batch_begin", state=state, mode=mode)
         keys, data, result = super().run_batch(mode=mode, batch_id=batch_id, *args, **kwargs)
-        self.state.update(**{k:v for k,v in result.items() if k in list(self.metrics.keys())+["loss"]})
-        self.fire("batch_end", mode=mode)
+        state.update(keys=keys, **data, **result)
+        #self.state.update(**{k:v for k,v in result.items() if k in list(self.metrics.keys())+["loss"]})
+        self.fire("batch_end", state=state, mode=mode)
         return result
 
     def run_cycle(self, subset, mode, *args, **kwargs):
         self.state["cycle_name"] = subset.name
         self.state["cycle_type"] = subset.type
         self.state["mode"] = mode
-        self.fire("cycle_begin", mode=mode)
+        state = dict(**self.state)
+        self.fire("cycle_begin", state=state, mode=mode)
         super().run_cycle(subset=subset, mode=mode, *args, **kwargs)
-        self.fire("cycle_end", mode=mode)
+        self.fire("cycle_end", state=state, mode=mode)
         del self.state["cycle_name"]
         del self.state["cycle_type"]
-        del self.state["batch"]
         del self.state["mode"]
 
-    def run_epoch(self, epoch, *args, **kwargs):
+    def run_epoch(self, epoch, mode, *args, **kwargs):
         self.state = {"epoch": epoch}
-        self.fire("epoch_begin")
-        super().run_epoch(epoch=epoch, *args, **kwargs)
-        self.fire("epoch_end")
+        state = dict(**self.state)
+        self.fire("epoch_begin", state=state, mode=mode)
+        super().run_epoch(epoch=epoch, mode=mode, *args, **kwargs)
+        self.fire("epoch_end", state=state, mode=mode)
+        del self.state["epoch"]
 
 @dataclass
 class SaveWeights(Callback):
-    after = ["AverageLoss", "GatherCycleMetrics"]
-    min_loss = None
-    strategy: str = "best"
+    after = ["GatherCycleMetrics"]
+    metric: str = "validation_loss"
+    strategy: str = "all"
     when: IntFlag = ExperimentMode.EVAL
     def init(self, exp):
         self.exp = exp
+        self.best = None
+    def do_save_weights(self, state):
+        if self.strategy == "all":
+            return True
+        current = state[self.metric]
+        if self.strategy == "min":
+            operator = min
+        elif self.strategy == "max":
+            operator = max
+        else:
+            raise ValueError("Unknown strategy. Expected 'all', 'min' or 'max'")
+        if self.best is None or operator(self.best, current) == current:
+            self.best = current
+            return True
+        return False
     def on_epoch_end(self, epoch, **state):
-        # TODO: correct "best" strategy
-        if     (self.strategy == "best" and (self.min_loss is None or state["training_loss"] < self.min_loss)) \
-            or (self.strategy == "all"):
-            self.min_loss = state.get("training_loss", None)
+        if self.do_save_weights(state):
             filename = os.path.join(self.exp.folder, self.exp.weights_formated_filename.format(epoch=epoch))
             self.exp.save_weights(filename)
 
@@ -152,7 +162,6 @@ class LoadWeights(Callback):
 @dataclass
 class StateLogger(Callback, metaclass=abc.ABCMeta):
     after = ["GatherCycleMetrics", "MeasureTime", "SaveLearningRate"]
-    excluded_keys = ["cycle_name", "cycle_type", "mode"]
     def init(self, exp):
         self.project_name = exp.get("project_name", "unknown_project")
         self.run_name = ", ".join([f"{k}={v}" for k,v in exp.grid_sample.items()]) or exp.get("run_name", "nil")
@@ -171,61 +180,58 @@ class LogStateDataCollector(StateLogger):
         filename = os.path.join(self.config.get("folder", "."), "history.dcp")
         return DataCollector(filename)
     def on_epoch_end(self, state, **_):
-        self.logger.update(**{k:v for k,v in state.items() if k not in self.excluded_keys})
+        self.logger.update(**state)
         self.logger.checkpoint()
 
 @dataclass
-class AccumulateBatchMetrics(Callback):
-    """ Removes metrics output by the model and accumulate them after each batch.
-        When cycle ends, restore the accumulated value in state.
-    """
-    metrics: list = None
-    def init(self, exp):
-        if not self.metrics:
-            self.metrics = list(exp.metrics.keys()) + ["loss"]
-    def on_cycle_begin(self, **_):
-        self.acc = {}
-    def on_batch_end(self, state, **_): # 'state' attribute in R/W
-        for name in self.metrics:
-            if name in state:
-                value = np.sum(state.pop(name), axis=0)
-                self.acc[name] = self.acc.setdefault(name, np.zeros_like(value)) + value
-    def on_cycle_end(self, state, **_): # 'state' attribute in R/W
-        state.update(**self.acc) # allows augmenting metrics before gathering cycle metrics
-
-@dataclass
 class AverageMetrics(Callback):
-    after = ["AccumulateBatchMetrics"]
     before = ["GatherCycleMetrics"]
     patterns: list
-    def on_cycle_end(self, batch: int, state: dict, **_):
+    def on_cycle_begin(self, **_):
+        self.acc = {}
+    def matching_patterns(self, state: dict):
         for name in state:
             for pattern in self.patterns:
                 if re.fullmatch(pattern, name):
-                    state[name] = state[name] / (batch+1)
-                    break
+                    yield name
+    def on_batch_end(self, **state):
+        for name in self.matching_patterns(state):
+            if name in self.acc:
+                self.acc.setdefault(name, []).append(state[name])
 
+    def on_cycle_end(self, state: dict, **_): # 'state' argument in R/W
+        for name, value in self.acc.items():
+            state[name] = np.mean(np.stack(value, axis=0), axis=0)
+
+@dataclass
 class StopFailedTraining(Callback):
     before = ["AccumulateBatchMetrics"]
     interruption_scheduled = False
+    consecutive_nans: int = 1
+    def __post_init__(self):
+        self.default_consecutive_nans = self.consecutive_nans
     def on_epoch_begin(self, **_):
         if self.interruption_scheduled:
             raise FailedTrainingError()
-    def on_batch_end(self, loss, **_):
+    def on_batch_end(self, batch, epoch, loss, **state):
         if np.isnan(loss):
-            self.interruption_scheduled = True
+            self.consecutive_nans -= 1
+            print(f"NaNs detected at epoch{epoch}, batch{batch}. {state}. consecutive nans={self.consecutive_nans}", flush=True)
+            if self.consecutive_nans <= 0:
+                self.interruption_scheduled = True
+        else:
+            self.consecutive_nans = self.default_consecutive_nans
 
 class GatherCycleMetrics(Callback):
-    after = ["AccumulateBatchMetrics"]
-    before = ["SaveLearningRate", "StateLogger"]
-    excluded_keys = ["cycle_name", "cycle_type", "epoch", "mode", "batch"]
+    before = ["StateLogger"]
+    excluded_keys = ["cycle_name", "cycle_type", "epoch", "mode"]
     def on_epoch_begin(self, **_):
         self.acc = {}
-    def on_cycle_end(self, cycle_name, state, **_): # 'state' attribute in R/W
-        for name in list(state):
+    def on_cycle_end(self, cycle_name, state, **_): # 'state' argument doesn't contain itself
+        for name in state:
             if name not in self.excluded_keys:
-                self.acc[cycle_name + "_" + name] = state.pop(name)
-    def on_epoch_end(self, state, **_): # 'state' attribute in R/W
+                self.acc[cycle_name + "_" + name] = state[name]
+    def on_epoch_end(self, state, **_): # 'state' argument in R/W
         state.update(**self.acc)
 
 class MeasureTime(Callback):
@@ -250,7 +256,6 @@ class MeasureTime(Callback):
         state["epoch_time"] = toc_epoch - self.tic_epoch
 
 class SaveLearningRate(Callback):
-    after = ["GatherCycleMetrics"]
     before = ["StateLogger"]
     def init(self, exp):
         self.learning_rate_getter = exp.get_learning_rate
@@ -330,7 +335,6 @@ class LearningRateWarmUp(Callback):
 class PrintLoss(Callback):
     """ Prints current batch loss every 'period' seconds
     """
-    before = ["AccumulateBatchMetrics"]
     period: int = 10
     def __post_init__(self):
         self.tic = time.time()
