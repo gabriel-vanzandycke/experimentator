@@ -31,11 +31,10 @@ class LogStateWandB(StateLogger):
     def on_epoch_end(self, state, **_):
         report = {}
         for key, data in state.items():
-            if key not in self.excluded_keys:
-                if isinstance(data, pandas.DataFrame):
-                    report[key] = wandb.Table(dataframe=data)
-                else:
-                    report[key] = data
+            if isinstance(data, pandas.DataFrame):
+                report[key] = wandb.Table(dataframe=data)
+            else:
+                report[key] = data
         self.wandb_run.log(report) # log *once* per epoch
 
         if self.criterion_metric and self.criterion_metric in report:
