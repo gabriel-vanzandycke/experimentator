@@ -75,7 +75,7 @@ def build_experiment(config_filename, **kwargs):
 class InterpreterError(Exception): pass
 
 # from https://stackoverflow.com/a/28836286/1782553
-def _exec(cmd, globals=None, locals=None, description='source string'):
+def _exec(cmd, globals=None, locals=None, description='source string'): # pylint: disable=redefined-builtin
     try:
         exec(cmd, globals, locals) # pylint: disable=exec-used
     except SyntaxError as err:
@@ -89,8 +89,10 @@ def _exec(cmd, globals=None, locals=None, description='source string'):
         line_number = traceback.extract_tb(tb)[-1][1]
     else:
         return
-    raise InterpreterError("%s at line %d of %s: %s" % (error_class, line_number, description, detail))
+    raise InterpreterError("%s at line %d of %s: %s\n%s" % (error_class, line_number, description, detail, cmd))
 
+def SpecificExperiment(string, context):
+    return eval(string, None, context)
 
 class JobStatus(Enum):
     TODO = 0
@@ -123,7 +125,8 @@ class Job():
     def exp(self):
         if self.dummy:
             self.config["experiment_type"].append(DummyExperiment)
-        return type("Exp", tuple(self.config["experiment_type"][::-1]), {})(self.config)
+        Type = type("Exp", tuple(self.config["experiment_type"][::-1]), {})
+        return Type(self.config)
 
     def run(self, epochs, keep=True, worker_ids=None, **runtime_cfg):
         project_name = runtime_cfg.get("project_name", os.path.splitext(os.path.basename(self.filename))[0])
