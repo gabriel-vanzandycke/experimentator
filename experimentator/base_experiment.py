@@ -99,17 +99,12 @@ class BaseExperiment(metaclass=abc.ABCMeta):
             except StopIteration:
                 break
 
-    def run_epoch(self, epoch):
+    def run_epoch(self, epoch, mode: ExperimentMode): # pylint: disable=unused-argument
         epoch_progress = self.progress(None, total=self.batch_count, unit="batches")
         self.batch_count = 0  # required
         for subset_name, subset in self.subsets.items():
-            assert subset.keys, "Empty subset is not allowed because it would require to adapt all callacks: {}".format(subset_name)
-            eval_epochs = self.cfg.get("eval_epochs", None)
-            if eval_epochs is None or epoch in eval_epochs:
-                mode = ExperimentMode.EVAL
-            elif subset.type == SubsetType.TRAIN:
-                mode = ExperimentMode.TRAIN
-            else:
+            #assert subset.keys, "Empty subset is not allowed because it would require to adapt all callacks: {}".format(subset_name)
+            if mode == ExperimentMode.TRAIN and subset.type != SubsetType.TRAIN:
                 continue # skip this cycle for this epoch
             self.run_cycle(subset=subset, mode=mode, epoch_progress=epoch_progress)
         epoch_progress.close()
@@ -117,7 +112,9 @@ class BaseExperiment(metaclass=abc.ABCMeta):
     def train(self, epochs):
         range_epochs = range(self.epochs, epochs)
         for epoch in self.progress(range_epochs, desc="epochs"):
-            self.run_epoch(epoch=epoch)
+            eval_epochs = self.cfg.get("eval_epochs", [epoch])
+            mode = ExperimentMode.EVAL if epoch in eval_epochs else ExperimentMode.TRAIN
+            self.run_epoch(epoch=epoch, mode=mode)
 
     def predict(self, data):
         return self.batch_infer(data)
