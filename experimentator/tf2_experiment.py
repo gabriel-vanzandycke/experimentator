@@ -23,8 +23,8 @@ class TensorFlowModelWrapper(tf.keras.Model): # pylint: disable=abstract-method
     def train_step(self, inputs):
         with tf.GradientTape() as tape:
             results = self(inputs, training=True)
-        if tf.math.reduce_any(tf.math.is_nan(results["loss"])):
-            pass #return results
+        # if tf.math.reduce_any(tf.math.is_nan(results["loss"])):
+        #     return results
         grads = tape.gradient(results["loss"], self.trainable_weights)
         self.optimizer.apply_gradients(zip(grads, self.trainable_weights))
         return results

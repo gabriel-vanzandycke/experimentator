@@ -205,7 +205,7 @@ class AverageMetrics(Callback):
 
 @dataclass
 class StopFailedTraining(Callback):
-    before = ["AccumulateBatchMetrics"]
+    before = ["StateLogger"]
     interruption_scheduled = False
     consecutive_nans: int = 1
     def __post_init__(self):
@@ -221,6 +221,9 @@ class StopFailedTraining(Callback):
                 self.interruption_scheduled = True
         else:
             self.consecutive_nans = self.default_consecutive_nans
+    def on_epoch_end(self, state, epoch, **_):
+        if self.interruption_scheduled:
+            state["comment"] = f"NaNs@epoch{epoch}"
 
 class GatherCycleMetrics(Callback):
     before = ["StateLogger"]
