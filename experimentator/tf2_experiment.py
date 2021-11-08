@@ -39,6 +39,7 @@ class TensorflowExperiment(BaseExperiment):
     run_metadata = None # overwritten by callbacks
     weights_formated_filename = "{epoch:04d}_weights"
     weights_file = None
+    batch_input_names = None
     # def __init__(self, *args, **kwargs):
     #     tf.keras.backend.clear_session()
     #     super().__init__(*args, **kwargs)
@@ -101,6 +102,7 @@ class TensorflowExperiment(BaseExperiment):
 
     @cached_property
     def inputs(self):
+        logging.debug("Initializing model with %s" % self.inputs_specs)
         return {name: tf.keras.Input(type_spec=type_spec, name=name) for name, type_spec in self.inputs_specs.items()}
 
     @cached_property
@@ -147,9 +149,9 @@ class TensorflowExperiment(BaseExperiment):
     def select_data(self, data):
         return {k:v for k,v in data.items() if k in self.inputs}
 
-    @staticmethod
-    def inputs_specs_from_batch(data):
-        return {name: tf.TensorSpec(dtype=array.dtype, shape=array.shape) for name, array in data.items()}
+    def inputs_specs_from_batch(self, data):
+        batch_input_names = self.batch_input_names or data.keys()
+        return {name: tf.TensorSpec(dtype=array.dtype, shape=array.shape) for name, array in data.items() if name in batch_input_names}
 
     def batch_train(self, data, mode=ExperimentMode.TRAIN):
         self.init_inputs(self.inputs_specs_from_batch(data))
