@@ -63,14 +63,13 @@ def set_cuda_visible_device(index):
     os.environ["CUDA_VISIBLE_DEVICES"] = os.environ["CUDA_VISIBLE_DEVICES"].split(',')[index]
 
 def build_experiment(config_filename, **kwargs):
-
     with open(find(config_filename)) as f:
         tree = ast.parse(f.read())
     update_ast(tree, dict({**kwargs, "filename": config_filename}), allow_double_assignation=True)
     config_str = astunparse.unparse(tree)
 
     config = parse_config_str(config_str)
-    return type("Exp", tuple(config["experiment_type"][::-1]), {})(config)
+    return type("Exp", tuple([t for t in config["experiment_type"][::-1] if t is not None]), {})(config)
 
 class InterpreterError(Exception): pass
 
@@ -109,6 +108,7 @@ class Job():
         self.status = JobStatus.TODO
 
     def update_ast(self, **kwargs):
+        print("Updating AST with {}".format(kwargs))
         return update_ast(self.config_tree, dict(kwargs)) # dict() makes a copy
 
     @property
@@ -125,7 +125,7 @@ class Job():
     def exp(self):
         if self.dummy:
             self.config["experiment_type"].append(DummyExperiment)
-        Type = type("Exp", tuple(self.config["experiment_type"][::-1]), {})
+        Type = type("Exp", tuple([t for t in self.config["experiment_type"][::-1] if t is not None]), {})
         return Type(self.config)
 
     def run(self, epochs, keep=True, worker_ids=None, **runtime_cfg):
