@@ -85,8 +85,17 @@ class Argmax(ChunkProcessor):
     def __call__(self, chunk):
         chunk[self.tensor_name] = tf.argmax(chunk[self.tensor_name], axis=-1)
 
+class ExpandDims(ChunkProcessor):
+    def __init__(self, tensor_names):
+        self.tensor_names = tensor_names
+    def __call__(self, chunk):
+        for name in self.tensor_names:
+            if name in chunk:
+                chunk[name] = chunk[name][..., tf.newaxis]
 
-# from tf1, untested
+class ReduceLossMap(ChunkProcessor):
+    def __call__(self, chunk):
+        chunk["loss"] = tf.reduce_mean(chunk["loss_map"])
 
 class UnSparsify(ChunkProcessor):
     def __call__(self, chunk):
@@ -153,10 +162,6 @@ class SoftmaxCrossEntropyLossMap(ChunkProcessor):
 class MeanSquaredErrorLossMap(ChunkProcessor):
     def __call__(self, chunk):
         chunk["loss_map"] = tf.losses.mean_squared_error(chunk["batch_target"], chunk["batch_logits"], reduction=tf.losses.Reduction.NONE)
-
-class ReduceLossMap(ChunkProcessor):
-    def __call__(self, chunk):
-        chunk["loss"] = tf.reduce_mean(chunk["loss_map"])
 
 class KerasHack(ChunkProcessor):
     def __call__(self, chunk):
