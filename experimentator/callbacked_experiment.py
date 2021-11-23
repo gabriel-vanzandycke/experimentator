@@ -196,8 +196,7 @@ class AverageMetrics(Callback):
                     yield name
     def on_batch_end(self, **state):
         for name in self.matching_patterns(state):
-            if name in self.acc:
-                self.acc.setdefault(name, []).append(state[name])
+            self.acc.setdefault(name, []).append(state[name])
 
     def on_cycle_end(self, state: dict, **_): # 'state' argument in R/W
         for name, value in self.acc.items():
