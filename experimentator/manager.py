@@ -77,21 +77,15 @@ class InterpreterError(Exception): pass
 def _exec(cmd, globals=None, locals=None, description='source string'): # pylint: disable=redefined-builtin
     try:
         exec(cmd, globals, locals) # pylint: disable=exec-used
-    except SyntaxError as err:
+    except (Exception, SyntaxError) as err:
         error_class = err.__class__.__name__
         detail = err.args[0]
-        line_number = err.lineno
-    except BaseException as err:
-        error_class = err.__class__.__name__
-        detail = err.args[0]
-        cl, exc, tb = sys.exc_info() # pylint: disable=unused-variable
-        line_number = traceback.extract_tb(tb)[-1][1]
+        tb = err.__traceback__
+        line_number = err.lineno if isinstance(err, SyntaxError) else traceback.extract_tb(tb)[-1][1]
+        traceback.print_exception(type(err), err, tb)
     else:
         return
     raise InterpreterError("%s at line %d of %s: %s\n%s" % (error_class, line_number, description, detail, cmd))
-
-def SpecificExperiment(string, context):
-    return eval(string, None, context)
 
 class JobStatus(Enum):
     TODO = 0

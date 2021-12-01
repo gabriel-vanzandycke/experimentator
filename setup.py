@@ -22,7 +22,7 @@ setup(
         "tqdm",
         "IPython",
         "pandas",
-        "aleatorpy",
+        "aleatorpy>=0.2.0",
         "python-constraint"
     ],
     extras_requires={
