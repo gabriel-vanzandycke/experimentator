@@ -23,8 +23,6 @@ class TensorFlowModelWrapper(tf.keras.Model): # pylint: disable=abstract-method
     def train_step(self, inputs):
         with tf.GradientTape() as tape:
             results = self(inputs, training=True)
-        # if tf.math.reduce_any(tf.math.is_nan(results["loss"])):
-        #     return results
         grads = tape.gradient(results["loss"], self.trainable_weights)
         self.optimizer.apply_gradients(zip(grads, self.trainable_weights))
         return results
@@ -40,6 +38,8 @@ class TensorflowExperiment(BaseExperiment):
     weights_formated_filename = "{epoch:04d}_weights"
     weights_file = None
     batch_input_names = None
+    batch_outputs_names = []
+    batch_metrics_names = []
     # def __init__(self, *args, **kwargs):
     #     tf.keras.backend.clear_session()
     #     super().__init__(*args, **kwargs)
@@ -47,11 +47,11 @@ class TensorflowExperiment(BaseExperiment):
 
     @cached_property
     def metrics(self):
-        return {}
+        return {name: self.chunk[name] for name in self.batch_metrics_names}
 
     @cached_property
     def outputs(self):
-        return {}
+        return {name: self.chunk[name] for name in self.batch_outputs_names}
 
     @cached_property
     def device(self):
@@ -92,7 +92,7 @@ class TensorflowExperiment(BaseExperiment):
 
     @cached_property
     def inputs_specs(self): #pylint: disable=method-hidden
-        data = next(iter(self.batch_generator(subset=self.subsets['training'])))[1]
+        data = next(iter(self.batch_generator(subset=self.subsets[0])))[1]
         return self.inputs_specs_from_batch(data)
 
     def init_inputs(self, inputs_specs):
@@ -102,7 +102,9 @@ class TensorflowExperiment(BaseExperiment):
 
     @cached_property
     def inputs(self):
-        logging.debug("Initializing model with %s" % self.inputs_specs)
+        if self.cfg.get("checkpoint"):
+            self.load_weights(self.cfg.get("checkpoint"))
+        print("Initializing model with %s" % self.inputs_specs, flush=True)
         return {name: tf.keras.Input(type_spec=type_spec, name=name) for name, type_spec in self.inputs_specs.items()}
 
     @cached_property
@@ -169,7 +171,7 @@ class TensorflowExperiment(BaseExperiment):
 
 @dataclass
 class EpochExponentialMovingAverage(Callback):
-    """ 'decay' is highly dependant on the dataset size, dataset homogenity and batch size.
+    r""" 'decay' is highly dependant on the dataset size, dataset homogenity and batch size.
         /!\  tf_decay = 1 - torch_decay
     """
     decay: float

@@ -1,6 +1,7 @@
 import abc
 from dataclasses import dataclass
 from enum import IntFlag
+from functools import cached_property
 import itertools
 import logging
 import os
@@ -8,9 +9,9 @@ import re
 import time
 import types
 
+import pickle
 import constraint as cst
 import numpy as np
-from mlworkflow import lazyproperty as cached_property
 
 from experimentator import BaseExperiment, SubsetType, ExperimentMode, DataCollector
 
@@ -97,7 +98,7 @@ class CallbackedExperiment(BaseExperiment): # pylint: disable=abstract-method
         state["batch"] = batch_id
         self.fire("batch_begin", state=state, mode=mode)
         keys, data, result = super().run_batch(mode=mode, batch_id=batch_id, *args, **kwargs)
-        state.update(keys=keys, **data, **result)
+        state.update(keys=keys, **{**data, **{k: v.numpy() for k,v in result.items()}})
         #self.state.update(**{k:v for k,v in result.items() if k in list(self.metrics.keys())+["loss"]})
         self.fire("batch_end", state=state, mode=mode)
         return result
@@ -212,8 +213,8 @@ class StopFailedTraining(Callback):
     def on_epoch_begin(self, **_):
         if self.interruption_scheduled:
             raise FailedTrainingError()
-    def on_batch_end(self, batch, epoch, loss, **state):
-        if np.isnan(loss):
+    def on_batch_end(self, batch, cycle_type, epoch, loss, **state):
+        if np.isnan(loss) and cycle_type == SubsetType.TRAIN:
             self.consecutive_nans -= 1
             print(f"NaNs detected at epoch{epoch}, batch{batch}. {state}. consecutive nans={self.consecutive_nans}", flush=True)
             if self.consecutive_nans <= 0:
@@ -265,6 +266,47 @@ class SaveLearningRate(Callback):
         state["learning_rate"] = self.learning_rate_getter()
 
 @dataclass
+class FindLearningRate(Callback):
+    before = ["GatherCycleMetrics"]
+    initial_learning_rate: float = 10e-10
+    final_learning_rate: float = 10e1
+    steps: int = 1000
+    def __post_init__(self):
+        self.history = []
+        self.interruption_scheduled = False
+    def init(self, exp):
+        self.learning_rate_setter = exp.set_learning_rate
+        self.learning_rate_getter = exp.get_learning_rate
+        self.batch_count = sum([len(subset.keys)//exp.batch_size for subset in exp.subsets if subset.type & SubsetType.TRAIN])
+        print("batch_count=", self.batch_count)
+        assert all([not isinstance(cb, (LearningRateWarmUp, LearningRateDecay)) for cb in exp.cfg['callbacks']]), f"{self.__class__} is incompatible with existing callbacks"
+    def compute_factor(self, step):
+        initial_exp = np.log(self.initial_learning_rate)
+        final_exp = np.log(self.final_learning_rate)
+        exp = initial_exp + (final_exp - initial_exp)*step/self.steps
+        return np.exp(exp)
+    def on_batch_begin(self, cycle_type, epoch, batch, **_):
+        if cycle_type == SubsetType.TRAIN:
+            step = epoch*self.batch_count + batch
+            if step >= self.steps:
+                self.interruption_scheduled = True
+            factor = self.compute_factor(step=step)
+            self.learning_rate_setter(self.initial_learning_rate * factor)
+    def on_batch_end(self, cycle_type, loss, **_):
+        if cycle_type == SubsetType.TRAIN:
+            loss = np.mean(loss)
+            self.history.append(loss)
+            if len(self.history) == self.steps:
+                pickle.dump({self.compute_factor(step): loss for step, loss in enumerate(self.history)}, open("loss_history.pickle", "wb"))
+                raise
+    def on_cycle_end(self, state, **_):
+        state["loss_evolution"] = np.array(self.history)
+    def on_epoch_begin(self, **_):
+        if self.interruption_scheduled:
+            raise FailedTrainingError
+
+
+@dataclass
 class LearningRateDecay(Callback):
     """ Decay learning rate by a given factor spread on every batch for a given
         number of epochs.
@@ -282,7 +324,7 @@ class LearningRateDecay(Callback):
         self.learning_rate_setter = exp.set_learning_rate
         self.learning_rate_getter = exp.get_learning_rate
         self.learning_rate = self.learning_rate_getter()
-        self.batch_count = sum([len(subset.keys)//exp.batch_size for _, subset in exp.subsets.items() if subset.type & SubsetType.TRAIN])
+        self.batch_count = sum([len(subset.keys)//exp.batch_size for subset in exp.subsets if subset.type & SubsetType.TRAIN])
         # adjust start and duration per step
         self.start = [epoch_start * self.batch_count for epoch_start in self.start]
         self.duration = self.duration * self.batch_count
@@ -317,7 +359,7 @@ class LearningRateWarmUp(Callback):
         self.learning_rate_setter = exp.set_learning_rate
         self.learning_rate_getter = exp.get_learning_rate
         self.learning_rate = self.learning_rate_getter()
-        self.batch_count = sum([len(subset.keys)//exp.batch_size for _, subset in exp.subsets.items() if subset.type & SubsetType.TRAIN])
+        self.batch_count = sum([len(subset.keys)//exp.batch_size for subset in exp.subsets if subset.type & SubsetType.TRAIN])
         # adjust start and duration per step
         self.start *= self.batch_count
         self.duration *= self.batch_count

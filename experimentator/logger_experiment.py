@@ -109,7 +109,7 @@ from .utils import DataCollector
 #         subsets_names = subsets_names or self.logger["subset_names"]
 #         metrics_names = metrics_names or [m for m in self.logger["metrics"] if m not in ["subset_name"]]#["accuracy", "batch_time", "precision", "recall", "loss"]#self.logger["metrics"]
 #         axes = build_metrics_axes(metrics_names, figsize) if fig is None else fig.get_axes()
-#         for subset in [s for name,s in self.subsets.items() if name in subsets_names]:
+#         for subset in [s for s in self.subsets if s.name in subsets_names]:
 #             for idx, metric_name in enumerate(metrics_names):
 #                 ax = axes[idx]
 #                 try:
