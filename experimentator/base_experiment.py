@@ -99,6 +99,7 @@ class BaseExperiment(metaclass=abc.ABCMeta):
     def run_epoch(self, epoch, mode: ExperimentMode): # pylint: disable=unused-argument
         cond = lambda subset: mode == ExperimentMode.EVAL or subset.type == SubsetType.TRAIN
         subsets = [subset for subset in self.subsets if cond(subset)]
+        assert subsets, "No single subset for this epoch"
         epoch_progress = self.progress(None, total=sum([len(subset) for subset in subsets]), unit="batches")
         for subset in subsets:
             self.run_cycle(subset=subset, mode=mode, epoch_progress=epoch_progress)
