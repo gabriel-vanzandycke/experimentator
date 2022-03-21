@@ -37,7 +37,7 @@ class TensorflowExperiment(BaseExperiment):
     run_metadata = None # overwritten by callbacks
     weights_formated_filename = "{epoch:04d}_weights"
     weights_file = None
-    batch_input_names = None
+    batch_inputs_names = None
     batch_outputs_names = []
     batch_metrics_names = []
     # def __init__(self, *args, **kwargs):
@@ -61,16 +61,18 @@ class TensorflowExperiment(BaseExperiment):
     def optimizer(self):
         return self.cfg["optimizer"]
 
-    def load_weights(self, filename="auto"):
+    def load_weights(self, filename="auto", now=False):
         if filename == "auto" or os.path.isdir(filename):
             dirname = os.path.dirname(self.cfg["filename"]) if filename == "auto" else filename
             try:
                 filename = sorted(glob.glob(os.path.join(dirname, "*.index")))[-1].replace(".index", "")
             except IndexError:
-                logging.error(f"Impossible to load weights in '{dirname}'. Use the 'filename' argument.")
+                print(f"Impossible to load weights in '{dirname}'. Use the 'filename' argument.")
                 return
-        logging.info(f"loading '{filename}'")
+        print(f"loading '{filename}'") #logging.info(f"loading '{filename}'")
         self.weights_file = filename
+        if now:
+            self.train_model # triggers the weights saved
 
     def save_weights(self, filename):
         self.train_model.save_weights(filename)
@@ -152,8 +154,8 @@ class TensorflowExperiment(BaseExperiment):
         return {k:v for k,v in data.items() if k in self.inputs}
 
     def inputs_specs_from_batch(self, data):
-        batch_input_names = self.batch_input_names or data.keys()
-        return {name: tf.TensorSpec(dtype=array.dtype, shape=array.shape) for name, array in data.items() if name in batch_input_names}
+        batch_inputs_names = self.batch_inputs_names or data.keys()
+        return {name: tf.TensorSpec(dtype=array.dtype, shape=array.shape) for name, array in data.items() if name in batch_inputs_names}
 
     def batch_train(self, data, mode=ExperimentMode.TRAIN):
         self.init_inputs(self.inputs_specs_from_batch(data))
