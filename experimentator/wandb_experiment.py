@@ -1,6 +1,7 @@
-import os
-import pandas
 from functools import cached_property
+import os
+
+import pandas
 from experimentator import StateLogger
 import wandb
 
@@ -9,9 +10,10 @@ os.environ["WANDB_START_METHOD"] = "thread"
 
 class LogStateWandB(StateLogger):
     best_report = {}
-    def __init__(self, criterion_metric=None, mode="online"):
+    def __init__(self, criterion_metric=None, higher_is_better=True, mode="online"):
         self.criterion_metric = criterion_metric
         self.mode = mode
+        self.higher_is_better = higher_is_better
         self.initialized = False
     @cached_property
     def wandb_run(self):
@@ -38,7 +40,10 @@ class LogStateWandB(StateLogger):
         self.wandb_run.log(report) # log *once* per epoch
 
         if self.criterion_metric and self.criterion_metric in report:
-            if not self.best_report or report[self.criterion_metric] > self.best_report[self.criterion_metric]:
+            if not self.best_report or (
+                   (    self.higher_is_better and report[self.criterion_metric] > self.best_report[self.criterion_metric])
+                or (not self.higher_is_better and report[self.criterion_metric] < self.best_report[self.criterion_metric])
+            ):
                 self.best_report = report
             self.wandb_run.summary.update(self.best_report)
 
