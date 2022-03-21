@@ -170,6 +170,7 @@ class StateLogger(Callback, metaclass=abc.ABCMeta):
 
         grid_sample = dict(exp.grid_sample) # copies the original dictionary
         grid_sample.pop("fold", None)       # removes 'fold' to be able to group runs
+        grid_sample.pop("init_index", None) # removes 'fold' to be able to group runs
         self.config["group"] = grid_sample
     @abc.abstractmethod
     def on_epoch_end(self, **_):
@@ -319,7 +320,8 @@ class LearningRateDecay(Callback):
     duration: int = 1
     factor: float = 0.1
     def __post_init__(self):
-        self.start = self.start if isinstance(self.start, (list, tuple)) else ([] if self.start is None else [self.start])
+        assert isinstance(self.start, (list, tuple, range, type(None))), "start must be a list or range or None"
+        self.start = [] if self.start is None else list(self.start)
     def init(self, exp):
         self.learning_rate_setter = exp.set_learning_rate
         self.learning_rate_getter = exp.get_learning_rate
