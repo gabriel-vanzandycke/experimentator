@@ -81,7 +81,7 @@ def find(filename, dirs=None, verbose=True):
             raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), filename)
         return filename
 
-    dirs = dirs or [os.getcwd(), *[os.getenv(name) for name in ['SCRATCH_FOLDER', 'DATASET_FOLDER', 'RESULTS_FOLDER']]]
+    dirs = dirs or [os.getcwd(), *[os.getenv(name) for name in ['SCRATCH_FOLDER', 'DATASET_FOLDER', 'RESULTS_FOLDER', 'SOURCE_FOLDER']]]
     for path in dirs:
         if path is None:
             continue
