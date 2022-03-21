@@ -58,14 +58,14 @@ class Subset:
         self.keys = keys
         self.repetitions = repetitions
         self.desc = desc
-        evolutive = self.type == SubsetType.TRAIN
-        loop = None if evolutive else repetitions
-        self.shuffled_keys = pseudo_random(evolutive=evolutive)(self.shuffled_keys)
+        self.is_training = self.type == SubsetType.TRAIN
+        loop = None if self.is_training else repetitions
+        self.shuffled_keys = pseudo_random(evolutive=self.is_training)(self.shuffled_keys)
         self.dataset.query_item = pseudo_random(loop=loop, input_dependent=True)(self.dataset.query_item)
 
     def shuffled_keys(self): # pylint: disable=method-hidden
         keys = self.keys * self.repetitions
-        return random.sample(keys, len(keys))
+        return random.sample(keys, len(keys)) if self.is_training else keys
 
     def __len__(self):
         return len(self.keys)*self.repetitions
