@@ -24,6 +24,7 @@ setup(
         "pandas",
         "aleatorpy>=0.2.0",
         "python-constraint"
+        "pyconfyg @ git+https://github.com/gabriel-vanzandycke/pyconfyg",
     ],
     extras_requires={
         "tensorflow": ["tensorflow>=2.4"],
