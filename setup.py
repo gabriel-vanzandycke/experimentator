@@ -14,7 +14,7 @@ setup(
         'console_scripts': ['experiment=experimentator:main'],
     },
     install_requires=[
-        "mlworkflow>=0.3.10",
+        "mlworkflow>=0.4.0",
         "dill",
         "numpy",
         "matplotlib",
@@ -24,7 +24,7 @@ setup(
         "pandas",
         "aleatorpy>=0.2.0",
         "python-constraint"
-        "pyconfyg @ git+https://github.com/gabriel-vanzandycke/pyconfyg",
+        "pyconfyg",
     ],
     extras_requires={
         "tensorflow": ["tensorflow>=2.4"],
