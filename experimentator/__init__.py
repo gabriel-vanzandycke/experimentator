@@ -1,4 +1,3 @@
-import utils
 from experimentator.utils import ExperimentMode, ChunkProcessor, DataCollector
 from experimentator.base_experiment import BaseExperiment, AsyncExperiment, DummyExperiment
 from experimentator.dataset import BasicDatasetSplitter, SubsetType, Subset
