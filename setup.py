@@ -23,7 +23,7 @@ setup(
         "IPython",
         "pandas",
         "aleatorpy>=0.2.0",
-        "python-constraint"
+        "python-constraint",
         "pyconfyg",
     ],
     extras_requires={
