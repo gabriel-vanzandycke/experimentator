@@ -8,7 +8,7 @@ setup(
     licence="LGPL",
     python_requires='>=3.8',
     description="My deep-learning experimentation framework",
-    version='2.2.4',
+    version='2.2.5',
     packages=find_packages(),
     entry_points={
         'console_scripts': ['experiment=experimentator:main'],
