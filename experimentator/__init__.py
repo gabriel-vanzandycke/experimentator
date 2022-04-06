@@ -6,3 +6,4 @@ from experimentator.callbacked_experiment import Callback, CallbackedExperiment,
     SaveLearningRate,  SaveWeights, StateLogger, LogStateDataCollector, GatherCycleMetrics, \
     AverageMetrics, LearningRateDecay, LearningRateWarmUp, PrintLoss, LoadWeights, FindLearningRate
 from experimentator.loggers import LoggingExperiment
+from experimentator.utils import find
