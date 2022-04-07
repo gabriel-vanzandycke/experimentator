@@ -25,6 +25,7 @@ setup(
         "aleatorpy>=0.2.0",
         "python-constraint",
         "pyconfyg",
+        "python-dotenv",
     ],
     extras_requires={
         "tensorflow": ["tensorflow>=2.4"],
