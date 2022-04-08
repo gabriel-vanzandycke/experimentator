@@ -35,7 +35,7 @@ class RobustDataset(Dataset):
         keys = keys or self.keys
         for chunk in self.chunkify(keys, chunk_size=batch_size, drop_incomplete=drop_incomplete, retry=retry):
             keys, batch = list(zip(*chunk)) # transforms list of (k,v) into list of (k) and list of (v)
-            yield keys, batchify(batch, wrapper=wrapper)
+            yield keys, {f"batch_{k}": v for k,v in batchify(batch, wrapper=wrapper).items()}
 
 
 

@@ -64,7 +64,7 @@ class BaseExperiment(metaclass=abc.ABCMeta):
     def batch_generator(self, subset: Subset, *args, batch_size=None, **kwargs):
         batch_size = batch_size or self.batch_size
         for keys, batch in subset.dataset.batches(keys=subset.shuffled_keys(), batch_size=batch_size, *args, **kwargs):
-            yield keys, {"batch_{}".format(k): v for k,v in batch.items()}
+            yield keys, {k: v for k,v in batch.items()}
 
     @abc.abstractmethod
     def batch_infer(self, *args, **kwargs):
