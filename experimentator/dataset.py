@@ -3,10 +3,12 @@ from enum import IntFlag
 import random
 import numpy as np
 
-from mlworkflow import Dataset
+from mlworkflow import Dataset, FilteredDataset
 from mlworkflow.datasets import batchify
 from aleatorpy import pseudo_random, method # pylint: disable=unused-import
 
+def collate_fn(items):
+    return {f"batch_{k}": v for k,v in batchify(items).items()}
 
 # This object is defined both in here and in dataset-utilities repository
 # Any change here should be reported in dataset-utilities as well
