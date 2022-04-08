@@ -61,7 +61,9 @@ class Job():
         # Write config string to file
         folder = os.path.join(os.getenv("RESULTS_FOLDER", "."), self.project_name, experiment_id)
         mkdir(folder)
-        os.symlink(folder, os.path.join(os.getenv("RESULTS_FOLDER", "."), self.project_name, "latest"))
+        link = os.path.join(os.getenv("RESULTS_FOLDER", "."), self.project_name, "latest")
+        os.remove(link)
+        os.symlink(folder, link)
         filename = os.path.join(folder, "config.py")
         with open(filename, "w") as f:
             f.write(self.confyg.string)
