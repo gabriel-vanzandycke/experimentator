@@ -31,7 +31,9 @@ def set_cuda_visible_device(index):
 
 def build_experiment(config_filename, **kwargs) -> BaseExperiment:
     confyg = Confyg(config_filename, dict({**kwargs, "filename": config_filename}))
-    return type("Exp", tuple([t for t in confyg.dict["experiment_type"][::-1] if t is not None]), {})(confyg.dict)
+    exp = type("Exp", tuple([t for t in confyg.dict["experiment_type"][::-1] if t is not None]), {})(confyg.dict)
+    exp.load_weights()
+    return exp
 
 class JobStatus(Enum):
     TODO = 0

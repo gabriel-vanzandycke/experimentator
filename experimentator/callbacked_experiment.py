@@ -149,7 +149,7 @@ class SaveWeights(Callback):
     def on_epoch_end(self, epoch, **state):
         if self.do_save_weights(state):
             filename = os.path.join(self.exp.folder, self.exp.weights_formated_filename.format(epoch=epoch))
-            self.exp.save_weights(filename)
+            self.train_model.save_weights(filename)
 
 @dataclass
 class LoadWeights(Callback):
