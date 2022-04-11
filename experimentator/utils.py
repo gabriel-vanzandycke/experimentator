@@ -22,8 +22,17 @@ def insert_suffix(filename, suffix):
     root, ext = os.path.splitext(filename)
     return root + suffix + ext
 
+
+class ExperimentMode(IntFlag):
+    NONE  = 0
+    TRAIN = 1
+    EVAL  = 2
+    INFER = 4
+    ALL   = -1
+
 # TODO: could be implemented using dataclass
 class ChunkProcessor():
+    mode = ExperimentMode.TRAIN | ExperimentMode.EVAL | ExperimentMode.INFER
     def __repr__(self):
         try:
             config = getattr(self, "config", {name: getattr(self, name) for name in inspect.getfullargspec(self.__init__).args[1:]})
@@ -181,12 +190,6 @@ linestyles = {
     "validation": "-",
     "testing": "-."
 }
-
-class ExperimentMode(IntFlag):
-    NONE  = 0
-    TRAIN = 1
-    EVAL  = 2
-    ALL   = -1
 
 # ----------------------------------------------------------------------
 # From: https://stackoverflow.com/a/53180921/1782553
