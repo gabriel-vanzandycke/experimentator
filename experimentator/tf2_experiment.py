@@ -38,7 +38,8 @@ class TensorflowExperiment(BaseExperiment):
     #     tf.keras.backend.clear_session()
     #     super().__init__(*args, **kwargs)
     #     print(f"clearing session for {self.grid_sample}")
-
+    mode = ExperimentMode.TRAIN | ExperimentMode.EVAL | ExperimentMode.INFER
+    
     @cached_property
     def metrics(self):
         return {name: self.chunk[name] for name in self.batch_metrics_names}

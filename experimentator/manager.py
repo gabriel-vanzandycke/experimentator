@@ -29,10 +29,11 @@ def set_cuda_visible_device(index):
     time.sleep(.1)
     os.environ["CUDA_VISIBLE_DEVICES"] = os.environ["CUDA_VISIBLE_DEVICES"].split(',')[index]
 
-def build_experiment(config_filename, **kwargs) -> BaseExperiment:
+def build_experiment(config_filename, load_weights=True, **kwargs) -> BaseExperiment:
     confyg = Confyg(config_filename, dict({**kwargs, "filename": config_filename}))
     exp = type("Exp", tuple([t for t in confyg.dict["experiment_type"][::-1] if t is not None]), {})(confyg.dict)
-    exp.load_weights()
+    if load_weights:
+        exp.load_weights()
     return exp
 
 class JobStatus(Enum):
@@ -61,12 +62,13 @@ class Job():
         worker_index = worker_ids[get_worker_id()] if worker_ids else 0
 
         # Write config string to file
-        folder = os.path.join(os.getenv("RESULTS_FOLDER", "."), self.project_name, experiment_id)
-        mkdir(folder)
+        output_folder = os.path.join(os.getenv("RESULTS_FOLDER", "."), self.project_name, experiment_id)
+        mkdir(output_folder)
         link = os.path.join(os.getenv("RESULTS_FOLDER", "."), self.project_name, "latest")
-        os.remove(link)
-        os.symlink(folder, link)
-        filename = os.path.join(folder, "config.py")
+        if os.path.islink(link):
+            os.remove(link)
+        os.symlink(output_folder, link)
+        filename = os.path.join(output_folder, "config.py")
         with open(filename, "w") as f:
             f.write(self.confyg.string)
 
@@ -75,7 +77,7 @@ class Job():
             project_name=self.project_name,
             experiment_id=experiment_id,
             worker_index=worker_index,
-            folder=folder,
+            output_folder=output_folder,
             dummy=self.dummy,
             grid_sample=self.grid_sample
         )
@@ -103,6 +105,7 @@ class Job():
 class ExperimentManager():
     side_runner = None
     def __init__(self, filename, logfile=None, num_workers=0, dummy=False, grid_search=None, runtime_cfg=None):
+        runtime_cfg = runtime_cfg or {}
         self.logger = logging.getLogger("experimentator")
         if logfile:
             handler = logging.FileHandler(logfile, mode="w")

@@ -40,7 +40,7 @@ class BaseExperiment(metaclass=abc.ABCMeta):
 
     @property
     def folder(self):
-        return self.get('folder', 'default_folder')
+        return self.get('output_folder', 'output_folder')
 
     @property
     def epochs(self):
@@ -48,14 +48,14 @@ class BaseExperiment(metaclass=abc.ABCMeta):
 
     @cached_property
     def grid_sample(self):
-        return self.cfg["grid_sample"]
+        return self.cfg.get("grid_sample", {})
 
     @cached_property
     def subsets(self):
         return self.cfg["subsets"]
 
-    def progress(self, generator, **kwargs):
-        return tqdm(generator, **kwargs, disable=self.get("hide_progress", False), leave=False)
+    def progress(self, generator, leave=False, **kwargs):
+        return tqdm(generator, **kwargs, disable=self.get("hide_progress", False), leave=leave)
 
     @property
     def batch_size(self):
@@ -63,8 +63,9 @@ class BaseExperiment(metaclass=abc.ABCMeta):
 
     def batch_generator(self, subset: Subset, *args, batch_size=None, **kwargs):
         batch_size = batch_size or self.batch_size
-        for keys, batch in subset.dataset.batches(keys=subset.shuffled_keys(), batch_size=batch_size, collate_fn=collate_fn, *args, **kwargs):
-            yield keys, {k: v for k,v in batch.items()}
+        keys = subset.shuffled_keys()
+        # yields pairs of (keys, data)
+        yield from subset.dataset.batches(keys=keys, batch_size=batch_size, collate_fn=collate_fn, *args, **kwargs)
 
     @abc.abstractmethod
     def batch_infer(self, *args, **kwargs):
@@ -91,7 +92,7 @@ class BaseExperiment(metaclass=abc.ABCMeta):
         while True:
             try:
                 _ = self.run_batch(subset=subset, batch_id=batch_id, batch_generator=batch_generator, mode=mode)
-                epoch_progress.update(self.batch_size)
+                epoch_progress.update(1)
                 batch_id += 1
             except StopIteration:
                 break
@@ -100,14 +101,14 @@ class BaseExperiment(metaclass=abc.ABCMeta):
         cond = lambda subset: mode == ExperimentMode.EVAL or subset.type == SubsetType.TRAIN
         subsets = [subset for subset in self.subsets if cond(subset)]
         assert subsets, "No single subset for this epoch"
-        epoch_progress = self.progress(None, total=sum([len(subset) for subset in subsets]), unit="batches")
+        epoch_progress = self.progress(None, total=sum([len(subset)//self.batch_size for subset in subsets]), unit="batches")
         for subset in subsets:
             self.run_cycle(subset=subset, mode=mode, epoch_progress=epoch_progress)
         epoch_progress.close()
 
     def train(self, epochs):
         range_epochs = range(self.epochs, epochs)
-        for epoch in self.progress(range_epochs, desc="epochs"):
+        for epoch in self.progress(range_epochs, leave=True, desc="epochs"):
             eval_epochs = self.cfg.get("eval_epochs", [epoch])
             mode = ExperimentMode.EVAL if epoch in eval_epochs else ExperimentMode.TRAIN
             self.run_epoch(epoch=epoch, mode=mode)
