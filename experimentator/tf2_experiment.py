@@ -4,19 +4,13 @@ from functools import cached_property
 import glob
 import logging
 import os
+import warnings
 
 import tensorflow as tf
 from tensorflow.python.client import timeline # pylint: disable=no-name-in-module, unused-import
 
 from experimentator import BaseExperiment, ExperimentMode, Callback, SubsetType
 
-def print_tensor(x, message=None):
-    def print_function(x):
-        if message is not None:
-            tf.print(message)
-        tf.print(x)
-        return x
-    return tf.keras.layers.Lambda(print_function)(x)
 
 class TensorFlowModelWrapper(tf.keras.Model): # pylint: disable=abstract-method
     @tf.function
@@ -44,7 +38,8 @@ class TensorflowExperiment(BaseExperiment):
     #     tf.keras.backend.clear_session()
     #     super().__init__(*args, **kwargs)
     #     print(f"clearing session for {self.grid_sample}")
-
+    mode = ExperimentMode.TRAIN | ExperimentMode.EVAL | ExperimentMode.INFER
+    
     @cached_property
     def metrics(self):
         return {name: self.chunk[name] for name in self.batch_metrics_names}
@@ -67,15 +62,13 @@ class TensorflowExperiment(BaseExperiment):
             try:
                 filename = sorted(glob.glob(os.path.join(dirname, "*.index")))[-1].replace(".index", "")
             except IndexError:
-                print(f"Impossible to load weights in '{dirname}'. Use the 'filename' argument.")
+                warnings.warn(f"Impossible to load weights in '{dirname}'. Use the 'filename' argument.")
                 return
         print(f"loading '{filename}'") #logging.info(f"loading '{filename}'")
         self.weights_file = filename
         if now:
+            # TODO: handle other models
             self.train_model # triggers the weights saved
-
-    def save_weights(self, filename):
-        self.train_model.save_weights(filename)
 
     def get_learning_rate(self):
         return self.optimizer.lr.numpy()
@@ -117,38 +110,38 @@ class TensorflowExperiment(BaseExperiment):
     def chunk(self):
         chunk = self.inputs.copy() # copies the dictionary, but not its values (passed by reference) to be used again in the model instanciation
         for chunk_processor in self.chunk_processors:
-            with tf.name_scope(chunk_processor.__class__.__name__):
-                try:
-                    chunk_processor(chunk)
-                except BaseException as e:
-                    if not self.cfg.get('robust', False):
-                        raise e
-                    logging.warning(f"{chunk_processor} skipped because of the following error: {e}")
+            if not getattr(chunk_processor, "mode", None) or chunk_processor.mode & self.mode:
+                with tf.name_scope(chunk_processor.__class__.__name__):
+                    try:
+                        chunk_processor(chunk)
+                    except BaseException as e:
+                        if not self.cfg.get('robust', False):
+                            raise e
+                        logging.warning(f"{chunk_processor} skipped because of the following error: {e}")
         return chunk
+
+    def build_model(self, inputs, outputs, optimizer=None):
+        model = TensorFlowModelWrapper(inputs, outputs)
+        if optimizer:
+            model.compile(optimizer=self.optimizer)
+        if self.weights_file:
+            model.load_weights(self.weights_file)
+        return model
 
     @cached_property
     def train_model(self):
-        model = TensorFlowModelWrapper(self.inputs, {"loss": self.chunk["loss"]})
-        model.compile(optimizer=self.optimizer)
-        if self.weights_file:
-            model.load_weights(self.weights_file)
-        return model
+        self.mode = ExperimentMode.TRAIN | ExperimentMode.EVAL
+        return self.build_model(self.inputs, {"loss": self.chunk["loss"]}, self.optimizer)
 
     @cached_property
     def eval_model(self):
-        model = TensorFlowModelWrapper(self.inputs, {"loss": self.chunk["loss"], **self.metrics}) # outputs are removed to accelerate evaluation during training. A dedicated eval+infer model should be used to perform both.
-        model.compile(optimizer=self.optimizer)
-        if self.weights_file:
-            model.load_weights(self.weights_file)
-        return model
+        self.mode = ExperimentMode.TRAIN | ExperimentMode.EVAL
+        return self.build_model(self.inputs, {"loss": self.chunk["loss"], **self.metrics}, self.optimizer) # outputs are removed to accelerate evaluation during training. A dedicated eval+infer model should be used to perform both.
 
     @cached_property
     def infer_model(self):
-        model = TensorFlowModelWrapper(self.inputs, self.outputs)
-        model.compile()
-        if self.weights_file:
-            model.load_weights(self.weights_file)
-        return model
+        self.mode = ExperimentMode.INFER
+        return self.build_model(self.inputs, self.outputs)
 
     def select_data(self, data):
         return {k:v for k,v in data.items() if k in self.inputs}

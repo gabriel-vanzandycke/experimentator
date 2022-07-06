@@ -117,11 +117,11 @@ class CallbackedExperiment(BaseExperiment): # pylint: disable=abstract-method
 
     def run_epoch(self, epoch, mode, *args, **kwargs):
         self.state = {"epoch": epoch}
-        state = dict(**self.state)
-        self.fire("epoch_begin", state=state, mode=mode)
+        # state = dict(**self.state)
+        self.fire("epoch_begin", state=self.state, mode=mode)
         super().run_epoch(epoch=epoch, mode=mode, *args, **kwargs)
-        self.fire("epoch_end", state=state, mode=mode)
-        del self.state["epoch"]
+        self.fire("epoch_end", state=self.state, mode=mode)
+        # del self.state["epoch"]
 
 @dataclass
 class SaveWeights(Callback):
@@ -149,7 +149,7 @@ class SaveWeights(Callback):
     def on_epoch_end(self, epoch, **state):
         if self.do_save_weights(state):
             filename = os.path.join(self.exp.folder, self.exp.weights_formated_filename.format(epoch=epoch))
-            self.exp.save_weights(filename)
+            self.exp.train_model.save_weights(filename)
 
 @dataclass
 class LoadWeights(Callback):
@@ -179,7 +179,7 @@ class StateLogger(Callback, metaclass=abc.ABCMeta):
 class LogStateDataCollector(StateLogger):
     @cached_property
     def logger(self):
-        filename = os.path.join(self.config.get("folder", "."), "history.dcp")
+        filename = os.path.join(self.config.get("output_folder", "."), "history.dcp")
         return DataCollector(filename)
     def on_epoch_end(self, state, **_):
         self.logger.update(**state)
