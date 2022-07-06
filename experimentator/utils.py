@@ -84,24 +84,24 @@ class StagnationError(Exception):
             raise cls("after {} epochs.".format(epoch))
 
 
-def find(filename, dirs=None, verbose=True):
-    if os.path.isabs(filename):
-        if not os.path.isfile(filename):
-            raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), filename)
-        return filename
+def find(path, dirs=None, verbose=True):
+    if os.path.isabs(path):
+        if not os.path.isfile(path) and not os.path.isdir(path):
+            raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
+        return path
 
     dirs = dirs or [os.getcwd(), *os.getenv("DATA_PATH").split(":")]
-    for path in dirs:
-        if path is None:
+    for dirname in dirs:
+        if dirname is None:
             continue
-        filepath = os.path.join(path, filename)
-        if os.path.isfile(filepath):
+        tmp_path = os.path.join(dirname, path)
+        if os.path.isfile(tmp_path) or os.path.isdir(tmp_path):
             if verbose:
-                print("{} found in {}".format(filename, filepath))
-            return filepath
+                print("{} found in {}".format(path, tmp_path))
+            return tmp_path
 
     raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT),
-                                "{} (searched in {})".format(filename, dirs))
+                                "{} (searched in {})".format(path, dirs))
 
 def datetime():
     dt = DT.datetime.now()
@@ -110,60 +110,6 @@ def datetime():
     dt = "{}_{}".format(d, t)
     return {"d": d, "t": t, "dt": dt}
 
-
-PLOT_HEIGHT = 4
-def build_metrics_axes(fetches, figsize=None):
-    figsize = figsize if figsize else (20, PLOT_HEIGHT*len(fetches))
-    _, axes = plt.subplots(len(fetches), 1, figsize=figsize, squeeze=False)
-    axes = [ax[0] for ax in axes]
-    # axes = [axes[0] for axes in fig.subplots(len(fetches), 1, squeeze=False)]
-    for ax, fetch in zip(axes, fetches):
-        ax.set_title(fetch)
-        ax.grid(color='lightgray', linestyle='-', linewidth=1)
-        if "accuracy" in fetch or fetch in ["recall", "accuracy", "precision"]:
-            ax.set_ylim([0, 1])
-        elif "learning_rate" in fetch:
-            ax.set_yscale('log')
-    return axes
-
-def get_axes(rows=1, cols=1, expected_shape=(1, 1), size=8, squeeze=False):
-    expected_width, expected_height = expected_shape
-    figsize = (size*cols, size*rows*expected_width/expected_height)
-    fig = mpl.figure.Figure(figsize=figsize)
-    mpl.backends.backend_agg.FigureCanvasAgg(fig)
-    fig.subplots_adjust(wspace=0.05)
-    fig.subplots(rows, cols)
-    return fig.subplots(rows, cols, squeeze=squeeze)
-
-def plot(ax, ydata, label, legend, replace=False, average=False, **kwargs):
-    if replace:
-        # Clean replaced elements
-        for elem in [e for e in ax.lines+ax.collections if e.get_label() == label]:
-            elem.remove()
-
-    dim = len(ydata.shape)
-    if dim == 1:
-        xdata = np.arange(ydata.shape[0])
-        mask = np.isfinite(ydata)
-        ax.plot(xdata[mask], ydata[mask], **kwargs, label=label)
-    elif dim == 2:
-        xdata = np.arange(ydata.shape[1])
-        mask = np.any(np.isfinite(ydata), axis=0)
-        if average:
-            mean = np.nanmean(ydata[:,mask], axis=0)
-            var = np.sqrt(np.nanvar(ydata[:,mask], axis=0))*1
-            ax.plot(xdata[mask], mean, **kwargs, label=label)
-            ax.fill_between(xdata[mask], mean+var, mean-var, alpha=0.3, label=label)
-        else:
-            for i in range(ydata.shape[0]):
-                ax.plot(xdata[mask], ydata[i, mask], **kwargs, label=label)
-    else:
-        raise ValueError("Invalid dimension for ydata")
-    if legend:
-        ax.legend()
-
-    # ax.relim()
-    # ax.autoscale_view(True, True, True)
 
 class Callable():
     def __init__(self, callee, *args, **kwargs):
