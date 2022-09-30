@@ -116,6 +116,7 @@ class TensorflowExperiment(BaseExperiment):
                         chunk_processor(chunk)
                     except BaseException as e:
                         if not self.cfg.get('robust', False):
+                            warnings.warn(f"Failed calling {chunk_processor}")
                             raise e
                         logging.warning(f"{chunk_processor} skipped because of the following error: {e}")
         return chunk

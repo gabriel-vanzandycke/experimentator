@@ -90,7 +90,7 @@ def find(path, dirs=None, verbose=True):
             raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
         return path
 
-    dirs = dirs or [os.getcwd(), *os.getenv("DATA_PATH").split(":")]
+    dirs = dirs or [os.getcwd(), *os.getenv("DATA_PATH", "").split(":")]
     for dirname in dirs:
         if dirname is None:
             continue

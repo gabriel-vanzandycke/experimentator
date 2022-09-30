@@ -41,6 +41,9 @@ class Subset:
     def __len__(self):
         return len(self.keys)*self.repetitions
 
+    def __str__(self):
+        return f"Subset<{self.name}>({len(self)})"
+
 from itertools import chain
 class CombinedSubsets:
     def __init__(self, *subsets):
