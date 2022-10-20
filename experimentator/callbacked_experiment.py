@@ -8,6 +8,7 @@ import os
 import re
 import time
 import types
+from typing import Tuple
 
 import pickle
 import constraint as cst
@@ -316,7 +317,7 @@ class LearningRateDecay(Callback):
         each batch.
         start and duration are expressed in epochs here
     """
-    start: (int, list, tuple)
+    start: Tuple[int, list, tuple]
     duration: int = 1
     factor: float = 0.1
     def __post_init__(self):
