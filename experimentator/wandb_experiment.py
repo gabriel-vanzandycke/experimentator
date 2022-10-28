@@ -1,8 +1,8 @@
 from functools import cached_property
 import os
 
+from experimentator import StateLogger, ConfusionMatrix
 import pandas
-from experimentator import StateLogger
 import wandb
 
 os.environ["WANDB_SILENT"] = "true"
@@ -35,6 +35,9 @@ class LogStateWandB(StateLogger):
         for key, data in state.items():
             if isinstance(data, pandas.DataFrame):
                 report[key] = wandb.Table(dataframe=data)
+            # elif isinstance(data, ConfusionMatrix):
+                # TODO: https://wandb.ai/wandb/plots/reports/Confusion-Matrix--VmlldzozMDg1NTM
+                # report[key] = wandb.plot.confusion_matrix(probs=None, y_true=ground_truth, preds=predictions, class_names=class_names)})
             else:
                 report[key] = data
         self.wandb_run.log(report) # log *once* per epoch
@@ -46,4 +49,3 @@ class LogStateWandB(StateLogger):
             ):
                 self.best_report = report
             self.wandb_run.summary.update(self.best_report)
-

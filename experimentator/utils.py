@@ -2,21 +2,16 @@ import errno
 import inspect
 import multiprocessing.pool
 import os
-import random
 import re
 import sys
 
 import datetime as DT
-import dataclasses
 from enum import IntFlag
 
 import dill as pickle
-import matplotlib as mpl
-from matplotlib import pyplot as plt
 import numpy as np
 
-from mlworkflow import get_callable, Dataset
-from mlworkflow.datasets import batchify
+from mlworkflow import get_callable
 
 def insert_suffix(filename, suffix):
     root, ext = os.path.splitext(filename)
@@ -74,6 +69,9 @@ def mkdir(path):
         if not os.path.isdir(path):
             raise
 
+class ConfusionMatrix(np.ndarray):
+    def __new__(cls, *args, **kwargs):
+        return np.array(*args, **kwargs)
 
 class StagnationError(Exception):
     @classmethod
