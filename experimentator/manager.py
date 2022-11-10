@@ -132,15 +132,15 @@ class ExperimentManager():
         return dict(zip(self.side_runner.pool.map(get_worker_id, seq), seq))
 
     def execute(self, epochs):
-        for job in self.jobs:
-            if job.status == JobStatus.TODO:
-                if self.side_runner:
-                    self.side_runner.run_async(Job.run, job, epochs=epochs, keep=False, worker_ids=self.worker_ids)
-                else:
-                    #p = multiprocessing.Process(target=job.run, args=(epochs, False), kwargs=runtime_cfg)
-                    #p.start()
-                    #p.join()
-                    job.run(epochs=epochs, keep=False) # pylint: disable=expression-not-assigned
+        while self.jobs:
+            job = self.jobs.pop()
+            if self.side_runner:
+                self.side_runner.run_async(Job.run, job, epochs=epochs, keep=False, worker_ids=self.worker_ids)
+            else:
+                #p = multiprocessing.Process(target=job.run, args=(epochs, False), kwargs=runtime_cfg)
+                #p.start()
+                #p.join()
+                job.run(epochs=epochs, keep=False) # pylint: disable=expression-not-assigned
 
         if self.side_runner:
             self.side_runner.collect_runs()
