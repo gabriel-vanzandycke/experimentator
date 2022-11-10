@@ -2,7 +2,6 @@ import errno
 import inspect
 import multiprocessing.pool
 import os
-import re
 import sys
 
 import datetime as DT
@@ -121,19 +120,6 @@ class Callable():
     def __repr__(self):
         return "{}({},{})".format(self.callee, self.args, self.kwargs)
 
-def transforms_to_name(transforms: list):
-    for t in transforms:
-        assert not re.match(".*object at 0x[0-9a-fA-F]*.*", str(t)), \
-            "The __str__ function of {} is not implemented".format(
-                t.__class__)
-    # sanitize name constructed by stringification of the transforms
-    return str(transforms).translate(str.maketrans({"$":  r"\$", " ": ""}))+".pickle"
-
-linestyles = {
-    "training": "--",
-    "validation": "-",
-    "testing": "-."
-}
 
 # ----------------------------------------------------------------------
 # From: https://stackoverflow.com/a/53180921/1782553
