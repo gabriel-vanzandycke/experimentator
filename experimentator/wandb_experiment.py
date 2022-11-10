@@ -29,7 +29,10 @@ class LogStateWandB(StateLogger):
         return run
     def __del__(self):
         if self.initialized:
-            self.wandb_run.finish()
+            try:
+                self.wandb_run.finish()
+            except RuntimeError:
+                self.wandb_run.finish() # try again
     def on_epoch_end(self, state, **_):
         report = {}
         for key, data in state.items():
