@@ -166,7 +166,8 @@ class StateLogger(Callback, metaclass=abc.ABCMeta):
     after = ["GatherCycleMetrics", "MeasureTime", "SaveLearningRate"]
     def init(self, exp):
         self.project_name = exp.get("project_name", "unknown_project")
-        self.run_name = ", ".join([f"{k}={v}" for k,v in exp.grid_sample.items()]) or exp.get("run_name", "nil")
+        excluded_keys = ['init_index']
+        self.run_name = ", ".join([f"{k}={v}" for k,v in exp.grid_sample.items() if k not in excluded_keys]) or exp.get("run_name", "nil")
         self.config = {k:v for k,v in exp.cfg.items() if not isinstance(v, types.ModuleType)} # lists and dictionnaries don't get printed correctly
 
         grid_sample = dict(exp.grid_sample) # copies the original dictionary
