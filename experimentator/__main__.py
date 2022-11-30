@@ -2,7 +2,7 @@ import os
 from dotenv import load_dotenv
 
 # For weird reason, __init__ is called before and putting 'load_dotenv()' here has not the desired effect of setting 'TF_CPP_MIN_LOG_LEVEL' before the import of main
-load_dotenv(dotenv_path=os.path.join(os.getcwd(), ".env"))
+load_dotenv()#dotenv_path=os.path.join(os.getcwd(), ".env"))
 
 from .manager import main # pylint: disable=wrong-import-position
 

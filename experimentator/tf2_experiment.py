@@ -6,6 +6,8 @@ import logging
 import os
 import warnings
 
+from packaging import version
+
 import tensorflow as tf
 from tensorflow.python.client import timeline # pylint: disable=no-name-in-module, unused-import
 
@@ -34,10 +36,14 @@ class TensorflowExperiment(BaseExperiment):
     batch_inputs_names = None
     batch_outputs_names = []
     batch_metrics_names = []
-    # def __init__(self, *args, **kwargs):
-    #     tf.keras.backend.clear_session()
-    #     super().__init__(*args, **kwargs)
-    #     print(f"clearing session for {self.grid_sample}")
+    def __init__(self, *args, **kwargs):
+        #tf.keras.backend.clear_session()
+        #print(f"clearing session for {self.grid_sample}")
+        super().__init__(*args, **kwargs)
+        self.gpus = tf.config.list_physical_devices('GPU')
+        print(self.gpus)
+        if not self.gpus:
+            warnings.warn("TensorflowExperiment instantiated without any GPU.")
     mode = ExperimentMode.TRAIN | ExperimentMode.EVAL | ExperimentMode.INFER
 
     @cached_property
@@ -100,7 +106,10 @@ class TensorflowExperiment(BaseExperiment):
         if self.cfg.get("checkpoint"):
             self.load_weights(self.cfg.get("checkpoint"))
         print("Initializing model with %s" % self.inputs_specs, flush=True)
-        return {name: tf.keras.Input(type_spec=type_spec, name=name) for name, type_spec in self.inputs_specs.items()}
+        if version.parse(tf.__version__) >= version.parse('2.5.0'):
+            return {name: tf.keras.Input(type_spec=type_spec, name=name) for name, type_spec in self.inputs_specs.items()}
+        else:
+            return {name: tf.keras.Input(shape=type_spec.shape[1:], dtype=type_spec.dtype, name=name) for name, type_spec in self.inputs_specs.items()}
 
     @cached_property
     def chunk_processors(self):

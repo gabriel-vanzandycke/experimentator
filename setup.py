@@ -23,6 +23,7 @@ setup(
         "IPython",
         "pandas",
         "aleatorpy>=0.2.0",
+        "packaging",
         "python-constraint",
         "pyconfyg",
         "python-dotenv",
