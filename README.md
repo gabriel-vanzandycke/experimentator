@@ -42,25 +42,13 @@ When using the TensorFlow implementation, the specific experiment must define th
 - `batch_metrics_names`: The chunk attribute names used to build the evaluation graph.
 - `batch_outputs_names`: The chunk attribute names used to build the inference graph.
 
+## Example
 
-** Configuration file**
+An example can be found in the `examples` folder:
 ```python
-data = tf.keras.datasets.mnist.load_data()
+exp = build_experiment("configs/mnist.py")
+exp.train(10) # trains for 10 epochs
 ```
-
-
-```python
-from functools import cached_property
-from experimentator import BaseExperiment
-
-class SpecificExperiment(BaseExperiment):
-    @cached_property
-    def subsets(self):
-        subsets = super().subsets
-        # <custom operations over subsets>
-        return subsets
-    def 
-exp = type("Exp", (SpecificExperiment, BaseExperiment), config)
 
 
 # Acknowledgements, motivations and recommendations
