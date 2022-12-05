@@ -7,9 +7,10 @@ from experimentator.tf2_chunk_processors import CastFloat, ExpandDims, SoftmaxCr
 experiment_type = [examples.tasks.mnist.MNISTExperiment]
 
 train, val = tf.keras.datasets.mnist.load_data()
+MNISTDataset = lambda subset: DictDataset(dict(enumerate(map(lambda x: {"input": x[0], "target": x[1]}, zip(*subset)))))
 subsets = [
-    Subset("training", SubsetType.TRAIN, DictDataset(dict(enumerate(map(lambda x: {"input": x[0], "target": x[1]}, zip(*train)))))),
-    Subset("validation", SubsetType.EVAL, DictDataset(dict(enumerate(map(lambda x: {"input": x[0], "target": x[1]}, zip(*val)))))),
+    Subset("training", SubsetType.TRAIN, MNISTDataset(train)),
+    Subset("validation", SubsetType.EVAL, MNISTDataset(val)),
 ]
 
 batch_size = 16
