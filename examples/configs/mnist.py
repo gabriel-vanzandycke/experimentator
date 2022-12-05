@@ -24,4 +24,5 @@ chunk_processors = [
     SoftmaxCrossEntropyLoss(), # defines 'loss'
 ]
 
-optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
+learning_rate=0.001
+optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate)
