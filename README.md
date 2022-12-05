@@ -35,15 +35,18 @@ The configuration must define the following attributes:
 - `batch_size`: an integer defining the batch size.
 - `chunk_processors`: a list of [`experimentator.ChunkProcessor`](https://github.com/gabriel-vanzandycke/experimentator/blob/main/experimentator/utils.py#L28) applied on `chunk`, a dictionnary initially filled from the batched dataset items. After being successively processed by each chunk processors, the `chunk` dictionnary should contain a `loss` attribute used for the gradient descent algorithm.
 
-**Tensorflow specific attributes:**
-- `optimizer`: a `tf.keras.optimizers.Optimizer`.
+**Framework specific attributes:**
+- `optimizer`: a `tf.keras.optimizers.Optimizer` for TensorFlow experiments and a `torch.optim.Optimizer` for PyTorch experiments.
+
 
 ### Implementation guidelines
 
-Working with TensorFlow, the `experiment_type` should contain the [`experimentator.TensorflowExperiment`](https://github.com/gabriel-vanzandycke/experimentator/blob/main/experimentator/tf2_experiment.py#L31) type. In addition, the specific experiment must define the following attributes:
+The `experiment_type` should contain the [`experimentator.TensorflowExperiment`](https://github.com/gabriel-vanzandycke/experimentator/blob/main/experimentator/tf2_experiment.py#L31) type when working with Tensorflow, and [`experimentator.TorchExperiment`]() when working with PyTorch.
+
+The specific experiment must define the following attributes:
 - `batch_inputs_names`: The initial chunk attribute names, extracted from the batched dataset items.
 - `batch_metrics_names`: The chunk attribute names used to build the evaluation graph.
-- `batch_outputs_names`: The chunk attribute names used to build the inference graph.
+- `batch_outputs_names`: The chunk attribute names used to build the inference graph (training graph is made from the chunk attribute `"loss"`).
 
 By default, all chunk processors are executed for training, evaluation and inference. However, by setting the `mode` attribute with the `ExperimentMode` `TRAIN`, `EVAL` and `INFER` flags, it's possible to have the chunk processors excuted only for specific phases. Typically, a data-augmentation chunk processor should have its `mode` set to `ExperimentMode.TRAIN` and a chunk processor computing evaluation metrics, to `ExperimentMode.EVAL`.
 
