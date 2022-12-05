@@ -7,7 +7,7 @@ This framework is a ML experimentation library that offers a **modular implemati
 This library is still in a beta phase and should be installed by cloning the repository:
 ```bash
 git clone git@github.com:gabriel-vanzandycke/experimentator.git
-cd experimentator and pip install -e .
+cd experimentator ; pip install -e .
 ```
 
 It is deep-learning framework agnostic but, to this day, only the API for TensorFlow is implemented.
