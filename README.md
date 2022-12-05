@@ -14,7 +14,7 @@ It is deep-learning framework agnostic but, to this day, only the API for Tensor
 
 ## Usage
 
-Instantiation of an experiment requires a **configuration** that can be any dictionary, but it's recommended to work woth [`Pyconfyg`](https://github.com/gabriel-vanzandycke/pyconfyg) which handles python language configuration files.
+Instantiation of an experiment requires a **configuration** that can be any dictionary, but it's recommended to work with [`Pyconfyg`](https://github.com/gabriel-vanzandycke/pyconfyg) which handles python language configuration files.
 
 ```python
 from experimentator import BaseExperiment
@@ -38,13 +38,16 @@ The configuration must define the following attributes:
 **Tensorflow specific attributes:**
 - `optimizer`: a `tf.keras.optimizers.Optimizer`.
 
-### Implementation requirements and guidelines
-When using the TensorFlow implementation, the specific experiment must define the following attributes:
+### Implementation guidelines
+
+Working with TensorFlow, the `experiment_type` should contain the [`experimentator.tf2_experiment.TensorflowExperiment`](https://github.com/gabriel-vanzandycke/experimentator/blob/main/experimentator/tf2_experiment.py) type. In addition, the specific experiment must define the following attributes:
 - `batch_inputs_names`: The initial chunk attribute names extracted from the input batch of data and converted to `tf.keras.Input`.
 - `batch_metrics_names`: The chunk attribute names used to build the evaluation graph.
 - `batch_outputs_names`: The chunk attribute names used to build the inference graph.
 
-By default, chunk processors are executed during training, validation and testing. However, by setting `mode` should
+By default, all chunk processors are executed for training, evaluation and inference. However, by setting the `mode` attribute with the `ExperimentMode` `TRAIN`, `EVAL` and `INFER` flags, it's possible to have the chunk processors excuted only for specific phases. Typically, a data-augmentation chunk processor should have `mode=ExperimentMode.TRAIN` and a chunk processor computing evaluation metrics should have `mode=ExperimentMode.EVAL`.
+
+
 
 ## Examples
 
