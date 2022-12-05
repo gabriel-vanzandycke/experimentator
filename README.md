@@ -40,12 +40,12 @@ The configuration must define the following attributes:
 
 ### Implementation guidelines
 
-Working with TensorFlow, the `experiment_type` should contain the [`experimentator.tf2_experiment.TensorflowExperiment`](https://github.com/gabriel-vanzandycke/experimentator/blob/main/experimentator/tf2_experiment.py) type. In addition, the specific experiment must define the following attributes:
-- `batch_inputs_names`: The initial chunk attribute names extracted from the input batch of data and converted to `tf.keras.Input`.
+Working with TensorFlow, the `experiment_type` should contain the [`experimentator.TensorflowExperiment`](https://github.com/gabriel-vanzandycke/experimentator/blob/main/experimentator/tf2_experiment.py#L31) type. In addition, the specific experiment must define the following attributes:
+- `batch_inputs_names`: The initial chunk attribute names, extracted from the batched dataset items.
 - `batch_metrics_names`: The chunk attribute names used to build the evaluation graph.
 - `batch_outputs_names`: The chunk attribute names used to build the inference graph.
 
-By default, all chunk processors are executed for training, evaluation and inference. However, by setting the `mode` attribute with the `ExperimentMode` `TRAIN`, `EVAL` and `INFER` flags, it's possible to have the chunk processors excuted only for specific phases. Typically, a data-augmentation chunk processor should have `mode=ExperimentMode.TRAIN` and a chunk processor computing evaluation metrics should have `mode=ExperimentMode.EVAL`.
+By default, all chunk processors are executed for training, evaluation and inference. However, by setting the `mode` attribute with the `ExperimentMode` `TRAIN`, `EVAL` and `INFER` flags, it's possible to have the chunk processors excuted only for specific phases. Typically, a data-augmentation chunk processor should have its `mode` set to `ExperimentMode.TRAIN` and a chunk processor computing evaluation metrics, to `ExperimentMode.EVAL`.
 
 
 
