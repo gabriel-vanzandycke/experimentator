@@ -28,8 +28,8 @@ exp = SpecificExperiment({})
 The configuration dictionnary must define the following attributes:
 
 **Generic attributes:**
-- `experiment_type`: a list of classes that the experiment will instantiate. This enables decoupling features into independant class definitions like `AsyncExperiment` featuring asynchronous data loading or `CallbackedExperiment` featuring callbacks called before and after each batch, subset and epoch.
-- `subsets`: a list of `experimentator.Subset`s (typically `training`, `validation` and `testing`), built from the dataset(s). The dataset(s) must inherit from [`mlworkflow.Dataset`](https://github.com/ispgroupucl/mlworkflow). Dataset items must be dictionnaries of named tensors, including model's input, targets and possibly any additional tensor required for training or evaluation.
+- `experiment_type`: a list of classes that the experiment will instantiate. This enables decoupling features into independant class definitions like [`AsyncExperiment`](https://github.com/gabriel-vanzandycke/experimentator/blob/main/experimentator/base_experiment.py#L119) featuring asynchronous data loading or [`CallbackedExperiment`](https://github.com/gabriel-vanzandycke/experimentator/blob/main/experimentator/callbacked_experiment.py#L36) featuring callbacks called before and after each batch, subset and epoch.
+- `subsets`: a list of [`experimentator.Subset`s](https://github.com/gabriel-vanzandycke/experimentator/blob/main/experimentator/dataset.py#L21) (typically `training`, `validation` and `testing`), built from the dataset(s). The dataset(s) must inherit from [`mlworkflow.Dataset`](https://github.com/ispgroupucl/mlworkflow). Dataset items must be dictionnaries of named tensors, including model's input, targets and possibly any additional tensor required for training or evaluation.
 - `batch_size`: an integer defining the batch size.
 - `chunk_processors`: a list of operations applied on batches dataset items. Those items, called `chunk`, are successively processed by each chunk processor. After executing all chunk processors, the chunk dictionnary should contain a `loss` attribute used for the gradient descent algorithm.
 
@@ -42,9 +42,10 @@ When using the TensorFlow implementation, the specific experiment must define th
 - `batch_metrics_names`: The chunk attribute names used to build the evaluation graph.
 - `batch_outputs_names`: The chunk attribute names used to build the inference graph.
 
-## Example
+## Example with explanations
 
-An example can be found in the `examples` folder:
+An example can be found in the `examples` folder. The experiment specific implementations are located in the `tasks/mnist.py` file. The configuration file, `configs/mnist.py`, defines every attribute required for the experiment.
+
 ```python
 exp = build_experiment("configs/mnist.py")
 exp.train(10) # trains for 10 epochs
