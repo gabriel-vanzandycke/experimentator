@@ -30,7 +30,7 @@ With `PyConfyg`, the configuration files are plain python files, bringing all fe
 The configuration must define the following attributes:
 
 **Generic attributes:**
-- `experiment_type`: a list of classes that the experiment will instantiate. This enables decoupling features into independant class definitions like [`AsyncExperiment`](https://github.com/gabriel-vanzandycke/experimentator/blob/main/experimentator/base_experiment.py#L119) featuring asynchronous data loading or [`CallbackedExperiment`](https://github.com/gabriel-vanzandycke/experimentator/blob/main/experimentator/callbacked_experiment.py#L36) featuring callbacks called before and after each batch, subset and epoch.
+- `experiment_type`: a list of classes that the experiment will instantiate. This enables decoupling features into independant class definitions like [`AsyncExperiment`](https://github.com/gabriel-vanzandycke/experimentator/blob/main/experimentator/base_experiment.py#L119) featuring asynchronous data loading or [`CallbackedExperiment`](https://github.com/gabriel-vanzandycke/experimentator/blob/main/experimentator/callbacked_experiment.py#L36) featuring callbacks called before and after each batch, subset and epoch. It should contain [`experimentator.TensorflowExperiment`](https://github.com/gabriel-vanzandycke/experimentator/blob/main/experimentator/tf2_experiment.py#L31) when working with Tensorflow, and [`experimentator.TorchExperiment`]() when working with PyTorch.
 - `subsets`: a list of [`experimentator.Subset`](https://github.com/gabriel-vanzandycke/experimentator/blob/main/experimentator/dataset.py#L21)s, typically a training, a validation and a testing set. The dataset provided to `Subset` must inherit from [`mlworkflow.Dataset`](https://github.com/ispgroupucl/mlworkflow) and its items must be dictionnaries of named tensors, including the machine learning model input and targets, but also any additional tensor required for training or evaluation.
 - `batch_size`: an integer defining the batch size.
 - `chunk_processors`: a list of [`experimentator.ChunkProcessor`](https://github.com/gabriel-vanzandycke/experimentator/blob/main/experimentator/utils.py#L28) applied on `chunk`, a dictionnary initially filled from the batched dataset items. After being successively processed by each chunk processors, the `chunk` dictionnary should contain a `loss` attribute used for the gradient descent algorithm.
@@ -40,8 +40,6 @@ The configuration must define the following attributes:
 
 
 ### Implementation guidelines
-
-The `experiment_type` should contain the [`experimentator.TensorflowExperiment`](https://github.com/gabriel-vanzandycke/experimentator/blob/main/experimentator/tf2_experiment.py#L31) type when working with Tensorflow, and [`experimentator.TorchExperiment`]() when working with PyTorch.
 
 The specific experiment must define the following attributes:
 - `batch_inputs_names`: The initial chunk attribute names, extracted from the batched dataset items.
@@ -65,7 +63,7 @@ exp.train(10) # trains for 10 epochs
 
 Using a `PyConfig` also makes grid searching very convenient:
 ```bash
-python -m experimentator configs/mnist.py --epochs 10 --grid "learning_rate=[0.1,0.01,0.001,0.0001]"
+python -m experimentator configs/mnist.py --epochs 10 --grid "learning_rate=[0.1,0.01,0.001]"
 ```
 
 
