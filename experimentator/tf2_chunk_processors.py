@@ -72,6 +72,14 @@ class GlobalAvgPoolingLogits(ChunkProcessor):
     def __call__(self, chunk):
         chunk["batch_logits"] = tf.reduce_mean(chunk["batch_logits"], axis=[1,2])
 
+class OneHotEncode(ChunkProcessor):
+    def __init__(self, tensor_name, num_classes):
+        self.num_classes = num_classes
+        self.tensor_name = tensor_name
+        self.on_value = 1.0
+        self.off_value = 0.0
+    def __call__(self, chunk):
+        chunk[self.tensor_name] = tf.one_hot(chunk[self.tensor_name], self.num_classes, on_value=self.on_value, off_value=self.off_value)
 
 class ExpandDims(ChunkProcessor):
     def __init__(self, tensor_names):
