@@ -3,7 +3,33 @@
 # Limitations (tested with TensorFlow v2.5)
 
 ## Impossible to create a random tensor of unknown shape
-When saving a model with unknown shape, creation of a random tensor of the same dimension is not supported. See https://stackoverflow.com/questions/70202763/initialize-tensorflow-custom-layer-attribute-at-runtime
+When saving a model with unknown shape, creation of a random tensor of the same dimension is not supported. 
+For instance, a layer that adds a constant noise to a batch of images:
+```
+class AvoidLocalEqualities(tf.keras.layers.Layer):
+    def build(self, input_shape):
+        self.random_tensor = tf.expand_dims(tf.random.normal(input_shape[1:], mean=0, stddev=0.001), 0)
+    def call(self, input_tensor):
+        return self.random_tensor+input_tensor
+```
+
+This layer requires knowing the input tensor shape. However, it may be useful to **support unknown shapes** that results from building the (fully convolutional) network for arbitrary input shapes, in order to save the model with the `tf.keras.Model.save()` API.
+
+> [...] defer weight creation to the first `__call__()` [...] wrapped in a `tf.init_scope`.
+
+suggested in the [documentation on custom layers](https://www.tensorflow.org/guide/keras/custom_layers_and_models) doesn't help because dimensions are required to build the layer.
+
+I tried using a `tf.Variable` with `validate_shape=False` but any random initializer seem to require a known shape, and a constant initializer defeats the purpose of the layer.
+
+Any attempts resulted to one of the following errors:
+```
+ValueError: Cannot convert a partially known TensorShape to a Tensor
+```
+```
+ValueError: None values not supported.
+```
+
+This was also [asked on StackOverflow](https://stackoverflow.com/questions/70202763/initialize-tensorflow-custom-layer-attribute-at-runtime), but without success.
 
 ## Item assignment not supported
 ```python
