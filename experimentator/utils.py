@@ -80,26 +80,6 @@ class StagnationError(Exception):
         if len(history) > tail and len(set(history[-tail:])) == 1:
             raise cls("after {} epochs.".format(epoch))
 
-
-def find(path, dirs=None, verbose=True):
-    if os.path.isabs(path):
-        if not os.path.isfile(path) and not os.path.isdir(path):
-            raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
-        return path
-
-    dirs = dirs or [os.getcwd(), *os.getenv("DATA_PATH", "").split(":")]
-    for dirname in dirs:
-        if dirname is None:
-            continue
-        tmp_path = os.path.join(dirname, path)
-        if os.path.isfile(tmp_path) or os.path.isdir(tmp_path):
-            if verbose:
-                print("{} found in {}".format(path, tmp_path))
-            return tmp_path
-
-    raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT),
-                                "{} (searched in {})".format(path, dirs))
-
 def datetime():
     dt = DT.datetime.now()
     d = dt.strftime("%Y%m%d")

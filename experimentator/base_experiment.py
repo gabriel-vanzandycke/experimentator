@@ -5,7 +5,7 @@ import logging
 from tqdm.auto import tqdm
 from mlworkflow import SideRunner
 
-from experimentator.dataset import Subset, SubsetType, collate_fn
+from experimentator.dataset import Subset, SubsetType
 from experimentator.utils import ExperimentMode
 
 # pylint: disable=abstract-method
@@ -61,11 +61,10 @@ class BaseExperiment(metaclass=abc.ABCMeta):
     def batch_size(self):
         return self.cfg["batch_size"]
 
-    def batch_generator(self, subset: Subset, *args, batch_size=None, **kwargs):
+    # yields pairs of (keys, data)
+    def batch_generator(self, subset: Subset, batch_size=None, **kwargs):
         batch_size = batch_size or self.batch_size
-        keys = subset.shuffled_keys()
-        # yields pairs of (keys, data)
-        yield from subset.dataset.batches(keys=keys, batch_size=batch_size, collate_fn=collate_fn, *args, **kwargs)
+        yield from subset.batches(batch_size=batch_size, **kwargs)
 
     @abc.abstractmethod
     def batch_infer(self, *args, **kwargs):

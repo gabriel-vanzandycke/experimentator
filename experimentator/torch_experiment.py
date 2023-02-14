@@ -4,10 +4,9 @@ import glob
 import logging
 import numpy as np
 import torch
-from .base_experiment import BaseExperiment, ExperimentMode
+from experimentator import SubsetType, BaseExperiment, ExperimentMode
 from .callbacked_experiment import Callback
 
-from .utils import SubsetType
 
 
 class TorchExperiment(BaseExperiment):
@@ -26,7 +25,7 @@ class TorchExperiment(BaseExperiment):
 
     @cached_property
     def device(self):
-        return 
+        return
 
     @cached_property
     def optimizer(self):
