@@ -9,8 +9,8 @@ import os
 import time
 
 from mlworkflow import SideRunner
-from experimentator import DummyExperiment
-from experimentator.utils import find, mkdir
+from experimentator import DummyExperiment, find
+from experimentator.utils import mkdir
 from experimentator.callbacked_experiment import FailedTrainingError
 from experimentator.base_experiment import BaseExperiment
 from pyconfyg import GridConfyg, parse_strings, Confyg
