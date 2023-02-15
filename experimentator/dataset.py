@@ -4,6 +4,8 @@ import errno
 import os
 import random
 
+import numpy as np
+
 from mlworkflow.datasets import batchify, Dataset, FilteredDataset, AugmentedDataset
 from aleatorpy import pseudo_random, method # pylint: disable=unused-import
 
@@ -46,7 +48,7 @@ class Subset:
         return len(self.keys)*self.repetitions
 
     def __str__(self):
-        return f"Subset<{self.name}>({len(self)})"
+        return f"{self.__class__.__name__}<{self.name}>({len(self)})"
 
     def batches(self, batch_size, keys=None, *args, **kwargs):
         keys = keys or self.shuffled_keys()
@@ -54,26 +56,27 @@ class Subset:
 
 
 class CombinedSubset(Subset):
-    def __init__(self, name, subsets):
+    def __init__(self, name, *subsets):
         self.subsets = subsets
-         # must
         self.name = name
-        self.type = SubsetType.TRAIN if any(s.type == SubsetType.TRAIN for s in subsets) else SubsetType.EVAL
-
-        self.is_training = self.type == SubsetType.TRAIN
-        self.datasets = [subset.dataset for subset in subsets]
-        self.keys = [subset.keys for subset in subsets]
-        self.repetitions = 1
+        assert len(set(subset.type for subset in subsets)) == 1, "Combined Subsets must have the same type"
+        self.type = subsets[0].type
 
     def __len__(self):
-        raise NotImplementedError
+        return min(len(subset) for subset in self.subsets)*len(self.subsets)
 
-    def shuffled_keys(self): # pylint: disable=method-hidden
-        raise NotImplementedError
-
-    def __str__(self):
-        return f"CombinedSubset<{self.name}>({len(self)})"
-
+    def batches(self, batch_size, **kwargs):
+        assert batch_size % len(self.subsets) == 0, f"Batch size must be a multiple of the number of subsets ({len(self.subsets)})"
+        batch_size = batch_size // len(self.subsets)
+        iterators = [subset.batches(batch_size, **kwargs) for subset in self.subsets]
+        while True:
+            try:
+                key_chunks, chunks = zip(*[next(it) for it in iterators])
+            except StopIteration:
+                break
+            keys = [key for key_chunk in key_chunks for key in key_chunk]
+            batch = {k: np.concatenate([chunk[k] for chunk in chunks]) for k in chunks[0]}
+            yield keys, batch
 
 
 class BalancedSubest(Subset):
