@@ -82,7 +82,7 @@ class CombinedSubset(Subset):
 class BalancedSubest(Subset):
     """
     """
-    def __init(self, balancing_attr, *args, **kwargs):
+    def __init__(self, balancing_attr, *args, **kwargs):
         super().__init__(self, *args, **kwargs)
         self.balancing_attr = balancing_attr
     def shuffled_keys(self):
