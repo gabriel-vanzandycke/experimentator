@@ -2,6 +2,7 @@ import abc
 from dataclasses import dataclass
 from enum import IntFlag
 from functools import cached_property
+import glob
 import itertools
 import logging
 import os
@@ -10,9 +11,9 @@ import time
 import types
 from typing import Tuple
 
-import pickle
 import constraint as cst
 import numpy as np
+import pickle
 
 from experimentator import BaseExperiment, SubsetType, ExperimentMode, DataCollector
 
@@ -128,11 +129,12 @@ class CallbackedExperiment(BaseExperiment): # pylint: disable=abstract-method
 class SaveWeights(Callback):
     after = ["GatherCycleMetrics"]
     metric: str = "validation_loss"
-    strategy: str = "all"
+    strategy: str = "last"
     when: IntFlag = ExperimentMode.EVAL
     def init(self, exp):
         self.exp = exp
         self.best = None
+        self.previous_filename = None
     def do_save_weights(self, state):
         if self.strategy == "all":
             return True
@@ -141,6 +143,8 @@ class SaveWeights(Callback):
             operator = min
         elif self.strategy == "max":
             operator = max
+        elif self.strategy == "last":
+            return True
         else:
             raise ValueError("Unknown strategy. Expected 'all', 'min' or 'max'")
         if self.best is None or operator(self.best, current) == current:
@@ -151,6 +155,9 @@ class SaveWeights(Callback):
         if self.do_save_weights(state):
             filename = os.path.join(self.exp.folder, self.exp.weights_formated_filename.format(epoch=epoch))
             self.exp.train_model.save_weights(filename)
+            if self.strategy == 'last' and self.previous_filename is not None:
+                list(map(os.remove, glob.glob(self.previous_filename+"*")))
+            self.previous_filename = filename
 
 @dataclass
 class LoadWeights(Callback):
