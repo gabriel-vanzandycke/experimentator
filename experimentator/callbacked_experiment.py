@@ -136,15 +136,13 @@ class SaveWeights(Callback):
         self.best = None
         self.previous_filename = None
     def do_save_weights(self, state):
-        if self.strategy == "all":
+        if self.strategy in ["all", "last"]:
             return True
         current = state[self.metric]
         if self.strategy == "min":
             operator = min
         elif self.strategy == "max":
             operator = max
-        elif self.strategy == "last":
-            return True
         else:
             raise ValueError("Unknown strategy. Expected 'all', 'min' or 'max'")
         if self.best is None or operator(self.best, current) == current:
