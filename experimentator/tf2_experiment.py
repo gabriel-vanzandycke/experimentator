@@ -37,11 +37,11 @@ class TensorflowExperiment(BaseExperiment):
     batch_outputs_names = []
     batch_metrics_names = []
     def __init__(self, *args, **kwargs):
-        #tf.keras.backend.clear_session()
+        tf.keras.backend.clear_session()
         #print(f"clearing session for {self.grid_sample}")
         super().__init__(*args, **kwargs)
         self.gpus = tf.config.list_physical_devices('GPU')
-        print(self.gpus)
+        print("gpus:", self.gpus)
         if not self.gpus:
             warnings.warn("TensorflowExperiment instantiated without any GPU.")
     mode = ExperimentMode.TRAIN | ExperimentMode.EVAL | ExperimentMode.INFER
