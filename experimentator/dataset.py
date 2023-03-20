@@ -30,7 +30,7 @@ class Subset:
         assert isinstance(keys, (tuple, list)), f"Received instance of {type(keys)} for subset {name}"
         self.name = name
         self.type = subset_type
-        self.dataset = FilteredDataset(dataset, predicate=lambda k,v: v is not None)
+        self.dataset = dataset#FilteredDataset(dataset, predicate=lambda k,v: v is not None)
         self._keys = keys
         self.keys = keys
         self.repetitions = repetitions
@@ -50,9 +50,51 @@ class Subset:
     def __str__(self):
         return f"{self.__class__.__name__}<{self.name}>({len(self)})"
 
+    def query_item(self, key):
+        return self.dataset.query_item(key)
+
+    def chunkify(self, keys, chunk_size):
+        d = []
+        for k in keys:
+            try:
+                v = self.query_item(k)
+            except KeyError:
+                continue
+            if v is None:
+                continue
+            d.append((k, v))
+            if len(d) == chunk_size:  # yield complete sublist and create a new list
+                yield d
+                d = []
+
     def batches(self, batch_size, keys=None, *args, **kwargs):
         keys = keys or self.shuffled_keys()
-        yield from self.dataset.batches(batch_size=batch_size, keys=keys, collate_fn=collate_fn, *args, **kwargs)
+        for chunk in self.chunkify(keys, chunk_size=batch_size):
+            keys, batch = list(zip(*chunk)) # transforms list of (k,v) into list of (k) and list of (v)
+            yield keys, collate_fn(batch)
+
+
+class FastFilteredDataset(Dataset):
+    def __init__(self, parent, predicate):
+        self.parent = parent
+        self.predicate = predicate
+        self.cached_keys = list(self.parent.keys.all())
+
+    def yield_keys(self):
+        yield from self.cached_keys
+
+    def __len__(self):
+        return len(self.cached_keys)
+
+    def query_item(self, key):
+        try:
+            item = self.parent.query_item(key)
+            if self.predicate(key, item):
+                return item
+        except KeyError:
+            pass
+        self.cached_keys.remove(key)
+        return None
 
 
 class CombinedSubset(Subset):

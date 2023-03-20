@@ -65,9 +65,12 @@ class Job():
         output_folder = os.path.join(os.getenv("RESULTS_FOLDER", "."), self.project_name, experiment_id)
         mkdir(output_folder)
         link = os.path.join(os.getenv("RESULTS_FOLDER", "."), self.project_name, "latest")
-        if os.path.islink(link):
-            os.remove(link)
-        os.symlink(output_folder, link)
+        try:
+            if os.path.islink(link):
+                os.remove(link)
+            os.symlink(output_folder, link)
+        except BaseException:
+            pass
         filename = os.path.join(output_folder, "config.py")
         with open(filename, "w") as f:
             f.write(self.confyg.string)
