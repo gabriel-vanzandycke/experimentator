@@ -11,6 +11,6 @@ if __name__ == "__main__":
     if not os.getcwd() in os.sys.path:
         os.sys.path.insert(0, os.getcwd())
 
-    print(f"Host: {os.uname().nodename.upper().lower()}, Binary: {os.sys.executable}")
+    print(f"Host: {os.uname().nodename.upper().lower()}, Executable: {os.sys.executable}")
 
     main()
