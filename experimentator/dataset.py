@@ -38,7 +38,7 @@ class Subset:
         self.is_training = self.type == SubsetType.TRAIN
         loop = None if self.is_training else repetitions
         self.shuffled_keys = pseudo_random(evolutive=self.is_training)(self.shuffled_keys)
-        self.dataset.query_item = pseudo_random(loop=loop, input_dependent=True)(self.dataset.query_item)
+        self.query_item = pseudo_random(loop=loop, input_dependent=True)(self.query_item)
 
     def shuffled_keys(self): # pylint: disable=method-hidden
         keys = self.keys * self.repetitions
