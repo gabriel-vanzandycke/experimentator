@@ -1,12 +1,15 @@
 import dataclasses
 from enum import IntFlag
 import errno
+import logging
 import os
 import random
+import shutil
+import threading
 
 import numpy as np
 
-from mlworkflow.datasets import batchify, Dataset, FilteredDataset, AugmentedDataset
+from mlworkflow.datasets import batchify, Dataset, AugmentedDataset, PickledDataset
 from aleatorpy import pseudo_random, method # pylint: disable=unused-import
 
 
@@ -226,10 +229,84 @@ def split_equally(d, K):
     return [x["list"] for x in f]
 
 
+# class UnSafeCachedPickledDataset(PickledDataset):
+#     def __init__(self, filename, local_scratch=""):
+#         super().__init__(filename)
+#         local_scratch = local_scratch or os.environ.get('LOCALSCRATCH', "")
+#         self.filename = None
+#         if local_scratch:
+#             def f():
+#                 print("Copying dataset to local scratch...")
+#                 self.filename = shutil.copy(filename, local_scratch)
+#                 print("Done.")
+#             self.sr = SideRunner()
+#             self.sr.do(f)
+#         else:
+#             self.query_item = super().query_item
 
-def find(path, dirs=None, verbose=True):
+#     def query_item(self, key):
+#         if self.filename:
+#             super().__init__(self.filename)
+#             self.query_item = super().query_item
+#         return super().query_item(key)
+
+class CachedPickledDataset(PickledDataset):
+    def __init__(self, filename, local_scratch=""):
+        super().__init__(filename)
+        local_scratch = local_scratch or os.environ.get('LOCALSCRATCH', "")
+        if not local_scratch or local_scratch in filename:
+            self.query_item = super().query_item
+            return
+
+        self.filename = os.path.join(local_scratch, os.path.basename(filename))
+        lock = f"{self.filename}.lock"
+        self.available = lambda: not os.path.exists(lock)
+
+        try:
+            with open(lock, "x") as _:
+                pass # First process to reach this point copies the dataset
+        except FileExistsError:
+            return
+
+        if os.path.isfile(self.filename):
+            os.remove(lock)
+            self.reload()
+            return
+
+        def function():
+            logging.info(f"Copying dataset to local scratch: {filename} -> " \
+                f"{self.filename}.")
+            try:
+                shutil.copy(filename, self.filename)
+            except:
+                try:
+                    os.remove(self.filename)
+                except:
+                    pass
+                logging.info("Failed copying dataset.")
+                self.query_item = super().query_item
+            os.remove(lock)
+        self.thread = threading.Thread(target=function, daemon=True)
+        self.thread.start()
+
+    def reload(self):
+        logging.info(f"Reloading dataset from {self.filename}")
+        super().__init__(self.filename)
+        self.query_item = super().query_item
+
+    def query_item(self, key):
+        if self.available():
+            self.reload()
+        return super().query_item(key)
+
+
+
+def find(path, dirs=None, verbose=True, fail=True):
     if os.path.isabs(path):
         if not os.path.isfile(path) and not os.path.isdir(path):
+            if not fail:
+                not verbose or print(f"{path} not found")
+                return None
             raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
         return path
 
@@ -239,9 +316,11 @@ def find(path, dirs=None, verbose=True):
             continue
         tmp_path = os.path.join(dirname, path)
         if os.path.isfile(tmp_path) or os.path.isdir(tmp_path):
-            if verbose:
-                print("{} found in {}".format(path, tmp_path))
+            not verbose or print("{} found in {}".format(path, tmp_path))
             return tmp_path
 
+    if not fail:
+        not verbose or print(f"{path} not found (searched in {dirs})")
+        return None
     raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT),
                                 "{} (searched in {})".format(path, dirs))
