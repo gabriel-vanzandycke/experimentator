@@ -19,9 +19,6 @@ from experimentator import BaseExperiment, SubsetType, ExperimentMode, DataColle
 
 # pylint: disable=logging-fstring-interpolation
 
-class FailedTrainingError(BaseException):
-    pass
-
 @dataclass
 class Callback():
     after = []
@@ -30,9 +27,9 @@ class Callback():
     events = ["epoch_begin", "cycle_begin", "batch_begin", "batch_end", "cycle_end", "epoch_end"]
     def fire(self, event, state):
         assert event in self.events, f"Unknown event: {event}. Existing events are {self.events}"
-        cb = getattr(self, "on_{}".format(event), None)
-        if cb:
-            cb(**state, state=state) # pylint: disable=not-callable
+        event_cb = getattr(self, "on_{}".format(event), None)
+        if event_cb:
+            event_cb(**state, state=state) # pylint: disable=not-callable
 
 class CallbackedExperiment(BaseExperiment): # pylint: disable=abstract-method
     state = {}
@@ -82,18 +79,13 @@ class CallbackedExperiment(BaseExperiment): # pylint: disable=abstract-method
         return callbacks
 
     def fire(self, event, state, mode=ExperimentMode.ALL):
-        cb_messages = []
-        try:
-            for cb in self.callbacks:
-                if cb.when & mode:
-                    cb_messages.append(f"{cb}({list(state.keys())})")
+        for cb in self.callbacks:
+            if cb.when & mode:
+                try:
                     cb.fire(event=event, state=state)
-        except FailedTrainingError:
-            raise
-        except:
-            cb_messages = "\n    ".join(cb_messages)
-            logging.error(f"Error calling '{event}' after:\n    {cb_messages}")
-            raise
+                except:
+                    logging.error(f"Error in callback '{cb}'")
+                    raise
 
     def run_batch(self, mode, batch_id, *args, **kwargs): # pylint: disable=signature-differs
         state = dict(**self.state)
@@ -117,11 +109,11 @@ class CallbackedExperiment(BaseExperiment): # pylint: disable=abstract-method
         del self.state["cycle_type"]
         del self.state["mode"]
 
-    def run_epoch(self, epoch, mode, *args, **kwargs):
-        self.state = {"epoch": epoch}
+    def run_epoch(self, mode, *args, **kwargs):
+        self.state = {"epoch": self.epoch}
         # state = dict(**self.state)
         self.fire("epoch_begin", state=self.state, mode=mode)
-        super().run_epoch(epoch=epoch, mode=mode, *args, **kwargs)
+        super().run_epoch(mode=mode, *args, **kwargs)
         self.fire("epoch_end", state=self.state, mode=mode)
         # del self.state["epoch"]
 
@@ -211,27 +203,6 @@ class AverageMetrics(Callback):
         for name, value in self.acc.items():
             state[name] = np.mean(np.stack(value, axis=0), axis=0)
 
-@dataclass
-class StopFailedTraining(Callback):
-    before = ["StateLogger"]
-    interruption_scheduled = False
-    consecutive_nans: int = 1
-    def __post_init__(self):
-        self.default_consecutive_nans = self.consecutive_nans
-    def on_epoch_begin(self, **_):
-        if self.interruption_scheduled:
-            raise FailedTrainingError()
-    def on_batch_end(self, batch, cycle_type, epoch, loss, **state):
-        if np.isnan(loss) and cycle_type == SubsetType.TRAIN:
-            self.consecutive_nans -= 1
-            print(f"NaNs detected at epoch{epoch}, batch{batch}. {state}. consecutive nans={self.consecutive_nans}", flush=True)
-            if self.consecutive_nans <= 0:
-                self.interruption_scheduled = True
-        else:
-            self.consecutive_nans = self.default_consecutive_nans
-    def on_epoch_end(self, state, epoch, **_):
-        if self.interruption_scheduled:
-            state["comment"] = f"NaNs@epoch{epoch}"
 
 class GatherCycleMetrics(Callback):
     before = ["StateLogger"]
@@ -311,7 +282,7 @@ class FindLearningRate(Callback):
         state["loss_evolution"] = np.array(self.history)
     def on_epoch_begin(self, **_):
         if self.interruption_scheduled:
-            raise FailedTrainingError
+            raise
 
 
 @dataclass
