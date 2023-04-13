@@ -99,7 +99,7 @@ class TensorflowExperiment(BaseExperiment):
     def init_inputs(self, inputs_specs):
         if "inputs" not in self.__dict__:
             self.inputs_specs = inputs_specs
-            _ = self.inputs
+            _ = self.inputs # triggers inputs instanciation
 
     @cached_property
     def inputs(self):
@@ -113,7 +113,7 @@ class TensorflowExperiment(BaseExperiment):
 
     @cached_property
     def chunk_processors(self):
-        return [CP for CP in self.cfg["chunk_processors"] if CP is not None] # cannot be a dict in case a ChunkProcessor is used twice
+        return [CP for CP in self.cfg["chunk_processors"] if CP is not None]
 
     @cached_property
     def chunk(self):
@@ -172,7 +172,6 @@ class TensorflowExperiment(BaseExperiment):
     def batch_infer(self, data):
         self.init_inputs(self.inputs_specs_from_batch(data))
         return self.infer_model.test_step(self.select_data(data))
-
 
 @dataclass
 class EpochExponentialMovingAverage(Callback):
