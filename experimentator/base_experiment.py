@@ -2,6 +2,7 @@ import abc
 from functools import cached_property
 import logging
 
+import numpy as np
 from tqdm.auto import tqdm
 from mlworkflow import SideRunner
 
@@ -11,6 +12,7 @@ from experimentator.utils import ExperimentMode
 # pylint: disable=abstract-method
 
 class BaseExperiment(metaclass=abc.ABCMeta):
+    epoch = 0
     def __init__(self, config):
         self.cfg = config
 
@@ -78,6 +80,7 @@ class BaseExperiment(metaclass=abc.ABCMeta):
 
     def run_batch(self, subset: Subset, batch_id: int, batch_generator, mode=ExperimentMode.ALL): # pylint: disable=unused-argument
         keys, data = next(batch_generator) # pylint: disable=unused-variable
+        data['epoch'] = np.array([self.epoch]*len(keys))
         if subset.type == SubsetType.TRAIN:
             return keys, data, self.batch_train(data, mode)
         elif subset.type == SubsetType.EVAL:
@@ -96,7 +99,7 @@ class BaseExperiment(metaclass=abc.ABCMeta):
             except StopIteration:
                 break
 
-    def run_epoch(self, epoch, mode: ExperimentMode): # pylint: disable=unused-argument
+    def run_epoch(self, mode: ExperimentMode): # pylint: disable=unused-argument
         cond = lambda subset: mode == ExperimentMode.EVAL or subset.type == SubsetType.TRAIN
         subsets = [subset for subset in self.subsets if cond(subset)]
         assert subsets, "No single subset for this epoch"
@@ -107,10 +110,10 @@ class BaseExperiment(metaclass=abc.ABCMeta):
 
     def train(self, epochs):
         range_epochs = range(self.epochs, epochs)
-        for epoch in self.progress(range_epochs, leave=True, desc="epochs"):
-            eval_epochs = self.cfg.get("eval_epochs", [epoch])
-            mode = ExperimentMode.EVAL if epoch in eval_epochs else ExperimentMode.TRAIN
-            self.run_epoch(epoch=epoch, mode=mode)
+        for self.epoch in self.progress(range_epochs, leave=True, desc="epochs"):
+            eval_epochs = self.cfg.get("eval_epochs", [self.epoch])
+            mode = ExperimentMode.EVAL if self.epoch in eval_epochs else ExperimentMode.TRAIN
+            self.run_epoch(mode=mode)
 
     def predict(self, data):
         return self.batch_infer(data)
