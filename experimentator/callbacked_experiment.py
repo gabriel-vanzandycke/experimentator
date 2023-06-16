@@ -144,7 +144,7 @@ class SaveWeights(Callback):
     def on_epoch_end(self, epoch, **state):
         if self.do_save_weights(state):
             filename = os.path.join(self.exp.folder, self.exp.weights_formated_filename.format(epoch=epoch))
-            self.exp.train_model.save_weights(filename)
+            self.exp.save_weights(filename)
             if self.strategy == 'last' and self.previous_filename is not None:
                 list(map(os.remove, glob.glob(self.previous_filename+"*")))
             self.previous_filename = filename

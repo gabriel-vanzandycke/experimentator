@@ -66,7 +66,7 @@ class TensorflowExperiment(BaseExperiment):
         if filename == "auto" or os.path.isdir(filename):
             dirname = os.path.dirname(self.cfg["filename"]) if filename == "auto" else filename
             try:
-                filename = sorted(glob.glob(os.path.join(dirname, "*.index")))[-1].replace(".index", "")
+                filename = sorted(glob.glob(os.path.join(dirname, "*[0-9]*.index")))[-1].replace(".index", "")
             except IndexError:
                 warnings.warn(f"Impossible to load weights in '{dirname}'. Use the 'filename' argument.")
                 return
@@ -75,6 +75,9 @@ class TensorflowExperiment(BaseExperiment):
         if now:
             # TODO: handle other models
             self.train_model # triggers the weights saved
+
+    def save_weights(self, filename):
+        self.train_model.save_weights(filename)
 
     def get_learning_rate(self):
         return self.optimizer.lr.numpy()

@@ -11,7 +11,6 @@ import time
 from mlworkflow import SideRunner
 from experimentator import DummyExperiment, find
 from experimentator.utils import mkdir
-from experimentator.callbacked_experiment import FailedTrainingError
 from experimentator.base_experiment import BaseExperiment
 from pyconfyg import GridConfyg, parse_strings, Confyg
 # pylint: disable=logging-fstring-interpolation, logging-format-interpolation
@@ -60,9 +59,19 @@ class Job():
     def run(self, epochs, keep=True, worker_ids=None):
         experiment_id = datetime.datetime.now().strftime("%Y%m%d_%H%M%S.%f")
         worker_index = worker_ids[get_worker_id()] if worker_ids else 0
+        output_folder = os.path.join(os.getenv("RESULTS_FOLDER", "."), self.project_name, experiment_id)
+
+        # Add run and project names
+        self.confyg.dict.update({
+            "project_name": self.project_name,
+            "experiment_id": experiment_id,
+            "worker_index": worker_index,
+            "output_folder": output_folder,
+            "dummy": self.dummy,
+            "grid_sample": self.grid_sample
+        })
 
         # Write config string to file
-        output_folder = os.path.join(os.getenv("RESULTS_FOLDER", "."), self.project_name, experiment_id)
         mkdir(output_folder)
         link = os.path.join(os.getenv("RESULTS_FOLDER", "."), self.project_name, "latest")
         try:
@@ -75,24 +84,11 @@ class Job():
         with open(filename, "w") as f:
             f.write(self.confyg.string)
 
-        # Add run and project names
-        self.confyg.dict.update(
-            project_name=self.project_name,
-            experiment_id=experiment_id,
-            worker_index=worker_index,
-            output_folder=output_folder,
-            dummy=self.dummy,
-            grid_sample=self.grid_sample
-        )
-
         # Launch training
         try:
             self.status = JobStatus.BUSY
             self.exp.logger.info(f"{self.project_name}.{experiment_id} doing {self.grid_sample}")
             self.exp.train(epochs=epochs)
-        except FailedTrainingError as e:
-            self.status = JobStatus.FAIL
-            self.exp.logger.warning(f"{self.project_name}.{experiment_id} failed with NaNs")
         except BaseException as e:
             self.status = JobStatus.FAIL
             self.exp.logger.exception(f"{self.project_name}.{experiment_id} failed")
@@ -116,11 +112,13 @@ class ExperimentManager():
             handler.setLevel(logging.INFO if num_workers > 0 else logging.DEBUG)
             self.logger.addHandler(handler)
         self.logger.setLevel(logging.INFO if num_workers > 0 else logging.DEBUG)
-        #threading.current_thread().name = "main"
+        self.num_workers = num_workers
+
         if num_workers > 0:
             self.side_runner = SideRunner(num_workers, impl=multiprocessing.Pool)#, impl=NestablePool)
-            if "CUDA_VISIBLE_DEVICES" in os.environ and len(os.environ["CUDA_VISIBLE_DEVICES"].split(",")) == num_workers and num_workers > 1:
-                self.side_runner.pool.map(set_cuda_visible_device, range(len(self.side_runner)))
+            self.logger.info(f"Running {num_workers} workers")
+        #     if "CUDA_VISIBLE_DEVICES" in os.environ and len(os.environ["CUDA_VISIBLE_DEVICES"].split(",")) == num_workers and num_workers > 1:
+        #         self.side_runner.pool.map(set_cuda_visible_device, range(len(self.side_runner)))
 
         self.logger.info(f"Runtime config: {runtime_cfg}")
         gc = GridConfyg(find(filename), grid_search, runtime_cfg)
@@ -129,22 +127,18 @@ class ExperimentManager():
 
     @cached_property
     def worker_ids(self):
-        if not self.side_runner:
-            return {get_worker_id():0}
-        seq = range(len(self.side_runner))
+        if self.num_workers <= 1:
+            return {get_worker_id(): 0}
+        seq = range(self.num_workers)
         return dict(zip(self.side_runner.pool.map(get_worker_id, seq), seq))
 
     def execute(self, epochs):
         while self.jobs:
-            job = self.jobs.pop()
+            job = self.jobs.pop(0)
             if self.side_runner:
                 self.side_runner.run_async(Job.run, job, epochs=epochs, keep=False, worker_ids=self.worker_ids)
             else:
-                #p = multiprocessing.Process(target=job.run, args=(epochs, False), kwargs=runtime_cfg)
-                #p.start()
-                #p.join()
                 job.run(epochs=epochs, keep=False) # pylint: disable=expression-not-assigned
-
         if self.side_runner:
             self.side_runner.collect_runs()
 
@@ -166,5 +160,5 @@ def main():
     kwargs = parse_strings(*list(itertools.chain(*args.kwargs)))
 
     num_subprocesses = 0 if args.workers <= 1 else args.workers
-    manager = ExperimentManager(args.filename, logfile=args.logfile, num_workers=num_subprocesses, dummy=args.dummy, grid_search=grid, runtime_cfg=kwargs)
+    manager = ExperimentManager(args.filename, logfile=args.logfile, num_workers=min(4, num_subprocesses), dummy=args.dummy, grid_search=grid, runtime_cfg=kwargs)
     manager.execute(args.epochs)

@@ -62,6 +62,7 @@ class Subset:
             try:
                 v = self.query_item(k)
             except KeyError:
+                print("caught keyerror, continuing")
                 continue
             if v is None:
                 continue
