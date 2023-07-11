@@ -1,5 +1,6 @@
 from functools import cached_property
 import os
+import json
 
 from experimentator import StateLogger, ConfusionMatrix
 import pandas
@@ -42,7 +43,11 @@ class LogStateWandB(StateLogger):
                 # TODO: https://wandb.ai/wandb/plots/reports/Confusion-Matrix--VmlldzozMDg1NTM
                 # report[key] = wandb.plot.confusion_matrix(probs=None, y_true=ground_truth, preds=predictions, class_names=class_names)})
             else:
-                report[key] = data
+                try:
+                    json.dumps(data)
+                    report[key] = data
+                except TypeError: # not JSON serializable
+                    continue
         self.wandb_run.log(report) # log *once* per epoch
 
         if self.criterion_metric and self.criterion_metric in report:
