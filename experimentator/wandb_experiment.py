@@ -1,6 +1,7 @@
 from functools import cached_property
 import os
 import json
+import warnings
 
 from experimentator import StateLogger, ConfusionMatrix
 import pandas
@@ -47,6 +48,7 @@ class LogStateWandB(StateLogger):
                     json.dumps(data)
                     report[key] = data
                 except TypeError: # not JSON serializable
+                    warnings.warn("Skipping non-JSON serializable key: {}".format(key))
                     continue
         self.wandb_run.log(report) # log *once* per epoch
 
