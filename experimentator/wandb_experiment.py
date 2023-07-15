@@ -1,9 +1,9 @@
 from functools import cached_property
 import os
 import json
-import warnings
+import numbers
 
-from experimentator import StateLogger, ConfusionMatrix
+from experimentator import StateLogger, ConfusionMatrix, warn_once
 import pandas
 import wandb
 
@@ -43,12 +43,14 @@ class LogStateWandB(StateLogger):
             # elif isinstance(data, ConfusionMatrix):
                 # TODO: https://wandb.ai/wandb/plots/reports/Confusion-Matrix--VmlldzozMDg1NTM
                 # report[key] = wandb.plot.confusion_matrix(probs=None, y_true=ground_truth, preds=predictions, class_names=class_names)})
+            elif isinstance(data, numbers.Number):
+                report[key] = data
             else:
                 try:
                     json.dumps(data)
                     report[key] = data
                 except TypeError: # not JSON serializable
-                    warnings.warn("Skipping non-JSON serializable key: {}".format(key))
+                    warn_once("Skipping non-JSON serializable key: {}".format(key))
                     continue
         self.wandb_run.log(report) # log *once* per epoch
 

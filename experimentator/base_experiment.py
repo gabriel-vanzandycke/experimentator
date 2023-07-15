@@ -98,6 +98,8 @@ class BaseExperiment(metaclass=abc.ABCMeta):
                 batch_id += 1
             except StopIteration:
                 break
+            except RuntimeError:
+                break
 
     def run_epoch(self, mode: ExperimentMode): # pylint: disable=unused-argument
         cond = lambda subset: mode == ExperimentMode.EVAL or subset.type == SubsetType.TRAIN

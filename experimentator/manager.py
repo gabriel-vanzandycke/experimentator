@@ -30,6 +30,8 @@ def set_cuda_visible_device(index):
 
 def build_experiment(config_filename, load_weights=True, **kwargs) -> BaseExperiment:
     confyg = Confyg(config_filename, dict({**kwargs, "filename": config_filename}))
+    if kwargs.get("dummy", False):
+        confyg.dict["experiment_type"].append(DummyExperiment)
     exp = type("Exp", tuple([t for t in confyg.dict["experiment_type"][::-1] if t is not None]), {})(confyg.dict)
     if load_weights:
         exp.load_weights()
@@ -85,6 +87,7 @@ class Job():
             f.write(self.confyg.string)
 
         # Launch training
+        print("Launching training", flush=True)
         try:
             self.status = JobStatus.BUSY
             self.exp.logger.info(f"{self.project_name}.{experiment_id} doing {self.grid_sample}")

@@ -1,11 +1,14 @@
+import datetime as DT
+from enum import IntFlag
 import errno
+import functools
 import inspect
+import logging
 import multiprocessing.pool
 import os
 import sys
+import warnings
 
-import datetime as DT
-from enum import IntFlag
 
 import dill as pickle
 import numpy as np
@@ -60,6 +63,10 @@ class OutputInhibitor():
         if self.name:
             print("Done.")
 
+
+@functools.lru_cache(None)
+def warn_once(msg):
+    logging.warning(msg)
 
 def mkdir(path):
     try:
@@ -200,7 +207,7 @@ class DataCollector(dict):
                 return get(key, history[s][key])
             if isinstance(s, slice):
                 return [get(key, data.get(key, None)) for data in history[s]]
-            raise ValueError("Expected (key,slice). Received ({},{}).".format(key,s))
+            raise ValueError("Expected (key, slice). Received ({},{}).".format(key,s))
         if isinstance(key, int):
             it = key
             return dict((key, self[key,it]) for key in self.history[it].keys())

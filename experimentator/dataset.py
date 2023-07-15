@@ -292,6 +292,7 @@ class CachedPickledDataset(PickledDataset):
 
     def reload(self):
         logging.info(f"Reloading dataset from {self.filename}")
+        print(f"Reloading dataset from {self.filename}")
         super().__init__(self.filename)
         self.query_item = super().query_item
 

@@ -48,11 +48,11 @@ class TensorflowExperiment(BaseExperiment):
 
     @cached_property
     def metrics(self):
-        return {name: self.chunk[name] for name in self.batch_metrics_names}
+        return {name: self.chunk[name] for name in self.batch_metrics_names if name in self.chunk}
 
     @cached_property
     def outputs(self):
-        return {name: self.chunk[name] for name in self.batch_outputs_names}
+        return {name: self.chunk[name] for name in self.batch_outputs_names if name in self.chunk}
 
     @cached_property
     def device(self):
