@@ -66,7 +66,8 @@ class TensorflowExperiment(BaseExperiment):
         if filename == "auto" or os.path.isdir(filename):
             dirname = os.path.dirname(self.cfg["filename"]) if filename == "auto" else filename
             try:
-                filename = sorted(glob.glob(os.path.join(dirname, "*[0-9]*.index")))[-1].replace(".index", "")
+                pattern = self.weights_formated_filename.format(epoch=0).replace("0000", "*") + ".index"
+                filename = sorted(glob.glob(os.path.join(dirname, pattern)))[-1].replace(".index", "")
             except IndexError:
                 warnings.warn(f"Impossible to load weights in '{dirname}'. Use the 'filename' argument.")
                 return
@@ -119,7 +120,7 @@ class TensorflowExperiment(BaseExperiment):
         return [CP for CP in self.cfg["chunk_processors"] if CP is not None]
 
     @cached_property
-    def chunk(self):
+    def chunk(self) -> dict:
         chunk = self.inputs.copy() # copies the dictionary, but not its values (passed by reference) to be used again in the model instanciation
         for chunk_processor in self.chunk_processors:
             if not getattr(chunk_processor, "mode", None) or chunk_processor.mode & self.mode:
@@ -136,7 +137,7 @@ class TensorflowExperiment(BaseExperiment):
     def build_model(self, inputs, outputs, optimizer=None):
         model = TensorFlowModelWrapper(inputs, outputs)
         if optimizer:
-            model.compile(optimizer=self.optimizer)
+            model.compile(optimizer=optimizer)
         if self.weights_file:
             model.load_weights(self.weights_file)
         return model
