@@ -201,7 +201,7 @@ class AverageMetrics(Callback):
 
     def on_cycle_end(self, state: dict, **_): # 'state' argument in R/W
         for name, value in self.acc.items():
-            state[name] = np.mean(np.stack(value, axis=0), axis=0)
+            state[name] = np.nanmean(np.stack(value, axis=0), axis=0)
 
 
 class GatherCycleMetrics(Callback):
