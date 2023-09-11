@@ -100,6 +100,15 @@ class UnSparsify(ChunkProcessor):
             if isinstance(chunk[name], tf.SparseTensor):
                 chunk[name] = tf.sparse.to_dense(chunk[name])
 
+class CombineLosses(ChunkProcessor):
+    mode = ExperimentMode.TRAIN | ExperimentMode.EVAL
+    def __init__(self, names, weights):
+        self.weights = weights
+        self.names = names
+    def __call__(self, chunk):
+        losses = tf.stack([chunk[name]*w for name, w in zip(self.names, self.weights)])
+        losses = losses[tf.math.is_nan(losses)]
+        chunk["loss"] = tf.reduce_sum(losses)
 
 class DeNormalize(ChunkProcessor):
     def __init__(self, tensor_name):
