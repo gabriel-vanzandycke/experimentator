@@ -11,7 +11,7 @@ from packaging import version
 import tensorflow as tf
 from tensorflow.python.client import timeline # pylint: disable=no-name-in-module, unused-import
 
-from experimentator import BaseExperiment, ExperimentMode, Callback, SubsetType
+from experimentator import BaseExperiment, ExperimentMode, Callback, SubsetType, build_experiment
 
 
 class TensorFlowModelWrapper(tf.keras.Model): # pylint: disable=abstract-method
@@ -176,6 +176,43 @@ class TensorflowExperiment(BaseExperiment):
     def batch_infer(self, data):
         self.init_inputs(self.inputs_specs_from_batch(data))
         return self.infer_model.test_step(self.select_data(data))
+
+
+class MissingChunkProcessorError(ValueError):
+    pass
+
+
+class AugmentedExperiment(TensorflowExperiment):
+    @cached_property
+    def chunk(self):
+        # build model
+        chunk = super().chunk
+
+        def matching_chunk_processor(chunk_processor, chunk_processors):
+            for cp in chunk_processors:
+                if hasattr(cp, 'model') and cp.model.name == chunk_processor.model.name:
+                    return cp
+            raise MissingChunkProcessorError
+
+        # load weights
+        if experiment_id := self.cfg.get("starting_weights"):
+            trainable = self.cfg.get("starting_weights_trainable", {})
+            folder = os.path.join(os.environ['RESULTS_FOLDER'], "ballstate", experiment_id)
+            exp = build_experiment(os.path.join(folder, "config.py"))
+            exp.load_weights(now=True)
+
+            for cp in self.chunk_processors:
+                if hasattr(cp, "model") and cp.model.name in trainable:
+                    filename = os.path.join(folder, cp.model.name)
+                    try:
+                        if not os.path.exists(f"{filename}.index"):
+                            matching_chunk_processor(cp, exp.chunk_processors).model.save_weights(filename)
+                        cp.model.load_weights(filename)
+                        cp.model.trainable = trainable[cp.model.name] # forces explicit loading of different models     .get(cp.model.name, False)
+                        print(f"Loading {cp.model.name} weights from {filename} (trainable={cp.model.trainable})")
+                    except MissingChunkProcessorError:
+                        print(f"'{cp.model.name}' chunk processor couldn't be found in {experiment_id}. Weights not loaded.")
+        return chunk
 
 @dataclass
 class EpochExponentialMovingAverage(Callback):
