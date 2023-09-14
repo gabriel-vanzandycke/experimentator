@@ -1,9 +1,9 @@
- 
+
 
 # Limitations (tested with TensorFlow v2.5)
 
 ## Impossible to create a random tensor of unknown shape
-When saving a model with unknown shape, creation of a random tensor of the same dimension is not supported. 
+When saving a model with unknown shape, creation of a random tensor of the same dimension is not supported.
 For instance, a layer that adds a constant noise to a batch of images:
 ```
 class AvoidLocalEqualities(tf.keras.layers.Layer):
@@ -66,6 +66,23 @@ See https://github.com/tensorflow/tensorflow/issues/36465
 ## Complicated limitations of tf.function
 See
 
+
+## NaN propagation in Loss computation
+Contrary to the functionnal API of losses, when using a loss object (tested with `BinaryCrossentropy` and `CategoricalCrossentropy`), if `y_true` contains NaNs, NaNs are being propagated throughout the whole trainable parameters.
+```
+y_pred = [1.0,  2.0  , 3.0]
+y_true = [0.0, tf.nan, 1.0]
+losses = tf.keras.losses.BinaryCrossentropy(from_logits=True, reduction=NONE)(y_true, y_pred)
+mask = tf.math.logical_not(tf.math.is_nan(losses))
+loss = tf.reduce_mean(losses[mask])
+```
+should instead be
+```
+y_pred = [1.0,  2.0  , 3.0]
+y_true = [0.0, tf.nan, 1.0]
+mask = tf.math.logical_not(tf.math.is_nan(y_true))
+loss = tf.keras.losses.BinaryCrossentropy(from_logits=True)(y_true[mask], y_pred[mask])
+```
 
 
 # Additional notes
@@ -222,5 +239,5 @@ def avg_spp_layer(self, input, size, name, padding=DEFAULT_PADDING):   #        
   return tf.images.resize_bilinear(pooled, (h, w))                     # original size     [B, H, W, C]
 ```
 
- 
- 
+
+
