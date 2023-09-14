@@ -1,3 +1,4 @@
+from collections import defaultdict
 import dataclasses
 from enum import IntFlag
 import errno
@@ -59,11 +60,7 @@ class Subset:
     def chunkify(self, keys, chunk_size):
         d = []
         for k in keys:
-            try:
-                v = self.query_item(k)
-            except KeyError:
-                print("caught keyerror, continuing")
-                continue
+            v = self.query_item(k)
             if v is None:
                 continue
             d.append((k, v))
@@ -77,6 +74,43 @@ class Subset:
             keys, batch = list(zip(*chunk)) # transforms list of (k,v) into list of (k) and list of (v)
             yield keys, collate_fn(batch)
 
+
+class BalancedSubset(Subset):
+    @classmethod
+    def convert(cls, subset, balancer, classes):
+        if isinstance(subset, cls):
+            return subset
+        return cls(name=subset.name, subset_type=subset.type, dataset=subset.dataset, keys=subset.keys,
+            repetitions=subset.repetitions, desc=subset.desc, balancer=balancer, classes=classes)
+
+    def __init__(self, *args, balancer, classes, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.balancer = balancer
+        self.classes = classes if isinstance(classes, dict) else {c: 1 for c in classes}
+        for c, p in self.classes.items():
+            if p != 1:
+                raise NotImplementedError("BalancedSubset does not support non-uniform class probabilities")
+        self.balance = dict()
+
+    def shuffled_keys(self):
+        if self.balancer is None:
+            return super().shuffled_keys()
+
+        pending_keys = defaultdict(list) # per class
+        yielded_keys = defaultdict(list) # per class
+        for _ in range(self.repetitions):
+            for key in self.keys:
+                try:
+                    c = self.balance.get(key) or self.balance.setdefault(key, self.balancer(key, self.query_item(key)))
+                except TypeError: # if query_item(key) is None (i.e. impossible to satisfy crop), a TypeError will be caught
+                    continue
+                pending_keys[c].append(key)
+
+                if all([len(pending_keys[c]) > 0 for c in self.classes]):
+                    for c in self.classes:
+                        key = pending_keys[c].pop(0)
+                        yielded_keys[c].append(key)
+                        yield key
 
 class FastFilteredDataset(Dataset):
     def __init__(self, parent, predicate):
