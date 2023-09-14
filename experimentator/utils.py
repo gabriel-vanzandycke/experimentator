@@ -7,7 +7,6 @@ import logging
 import multiprocessing.pool
 import os
 import sys
-import warnings
 
 
 import dill as pickle
@@ -153,10 +152,13 @@ class DataCollector(dict):
                 while True:
                     data = unpickler.load()
                     self.history.append(data)
+            except pickle.UnpicklingError:
+                print(f"Caught unpickling error reading '{filename}'. DataCollection may be truncated.", file=sys.stderr)
             except EOFError:
                 if self.history:
                     for k,v in self.history[-1].items():
                         self.__setitem__(k,v, skip_external=True)
+
             self.file.close()
             self.file = None
 
