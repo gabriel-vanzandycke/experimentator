@@ -107,8 +107,22 @@ class CombineLosses(ChunkProcessor):
         self.names = names
     def __call__(self, chunk):
         losses = tf.stack([chunk[name]*w for name, w in zip(self.names, self.weights)])
-        losses = losses[tf.math.is_nan(losses)]
+        losses = losses[tf.math.logical_not(tf.math.is_nan(losses))]
         chunk["loss"] = tf.reduce_sum(losses)
+
+class AlexKendallCombineLosses(CombineLosses):
+    def __init__(self, names, weights):
+        self.names = names
+        self.weights = weights
+    def __call__(self, chunk):
+        log_sigmas = tf.Variable([0]*len(self.names), dtype=tf.float32) # more stable than using sigmas
+        losses = tf.stack([chunk[name]*w for name, w in zip(self.names, self.weights)])
+        mask = tf.math.logical_and(
+            tf.math.logical_not(tf.math.is_nan(losses)),
+            tf.cast(losses, tf.bool)
+        )
+        losses = losses / tf.math.exp(2*log_sigmas) + log_sigmas
+        chunk["loss"] = tf.reduce_sum(losses[mask])
 
 class DeNormalize(ChunkProcessor):
     def __init__(self, tensor_name):
