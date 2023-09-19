@@ -60,6 +60,7 @@ class Job():
 
     def run(self, epochs, keep=True, worker_ids=None):
         experiment_id = datetime.datetime.now().strftime("%Y%m%d_%H%M%S.%f")
+        print("Doing", experiment_id)
         worker_index = worker_ids[get_worker_id()] if worker_ids else 0
         output_folder = os.path.join(os.getenv("RESULTS_FOLDER", "."), self.project_name, experiment_id)
 
