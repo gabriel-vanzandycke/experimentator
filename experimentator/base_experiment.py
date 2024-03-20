@@ -54,7 +54,13 @@ class BaseExperiment(metaclass=abc.ABCMeta):
 
     @cached_property
     def subsets(self):
-        return self.cfg["subsets"]
+        subsets = []
+        for subset in self.cfg["subsets"]:
+            if subset.keys:
+                subsets.append(subset)
+            else:
+                print("Skipping empty subset: {}".format(subset.name))
+        return subsets
 
     def progress(self, generator, leave=False, **kwargs):
         return tqdm(generator, **kwargs, disable=self.get("hide_progress", False), leave=leave)
