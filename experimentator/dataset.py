@@ -52,21 +52,26 @@ class Subset:
         return len(self.keys)*self.repetitions
 
     def __str__(self):
-        return f"{self.__class__.__name__}<{self.name}>({len(self)})"
+        return f"{self.__class__.__name__}<{self.name}>({len(self.keys)}*{self.repetitions})"
 
     def query_item(self, key):
         return self.dataset.query_item(key)
 
-    def chunkify(self, keys, chunk_size):
+    def chunkify(self, keys, chunk_size, drop_last=True):
         d = []
         for k in keys:
-            v = self.query_item(k)
+            try:
+                v = self.query_item(k)
+            except KeyError:
+                continue
             if v is None:
                 continue
             d.append((k, v))
             if len(d) == chunk_size:  # yield complete sublist and create a new list
                 yield d
                 d = []
+        if not drop_last and d:
+            yield d
 
     def batches(self, batch_size, keys=None, *args, **kwargs):
         keys = keys or self.shuffled_keys()
