@@ -58,6 +58,7 @@ class BaseExperiment(metaclass=abc.ABCMeta):
         for subset in self.cfg["subsets"]:
             if subset.keys:
                 subsets.append(subset)
+                print(subset)
             else:
                 print("Skipping empty subset: {}".format(subset.name))
         return subsets
