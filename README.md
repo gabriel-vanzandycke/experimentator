@@ -1,6 +1,6 @@
 # Experimentator
 
-This framework is a ML experimentation library that offers a **modular implemation workflow** where a single python class holds the dataset, callacks and data processing graphs. By implementing a derived task-specific class, users can alter any attribute of the experiment instance.
+This framework is a ML experimentation library that offers a **modular implementation workflow** where a single python class holds the dataset, callacks and data processing graphs. By implementing a derived task-specific class, users can alter any attribute of the experiment instance.
 
 ## Installation and dependencies
 
