@@ -28,8 +28,10 @@ def set_cuda_visible_device(index):
     time.sleep(.1)
     os.environ["CUDA_VISIBLE_DEVICES"] = os.environ["CUDA_VISIBLE_DEVICES"].split(',')[index]
 
-def build_experiment(config_filename, load_weights=True, **kwargs) -> BaseExperiment:
-    confyg = Confyg(config_filename, dict({**kwargs, "filename": config_filename}))
+def build_experiment(config, load_weights=True, **kwargs) -> BaseExperiment:
+    """ config: either a path to a config file or a string
+    """
+    confyg = Confyg(config, kwargs)
     if kwargs.get("dummy", False):
         confyg.dict["experiment_type"].append(DummyExperiment)
     exp = type("Exp", tuple([t for t in confyg.dict["experiment_type"][::-1] if t is not None]), {})(confyg.dict)
