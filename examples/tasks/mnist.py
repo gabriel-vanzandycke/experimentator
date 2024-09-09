@@ -1,5 +1,4 @@
 import tensorflow as tf
-import numpy as np
 
 from experimentator import ChunkProcessor
 from experimentator.tf2_experiment import TensorflowExperiment

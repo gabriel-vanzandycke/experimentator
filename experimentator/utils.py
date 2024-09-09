@@ -1,6 +1,5 @@
 import datetime as DT
 from enum import IntFlag
-import errno
 import functools
 import inspect
 import logging

@@ -3,7 +3,7 @@ import os
 import json
 import numbers
 
-from experimentator import StateLogger, ConfusionMatrix, warn_once
+from experimentator import StateLogger, warn_once
 import pandas
 import wandb
 

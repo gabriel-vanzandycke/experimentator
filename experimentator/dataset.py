@@ -11,7 +11,7 @@ import threading
 import numpy as np
 
 from mlworkflow.datasets import batchify, Dataset, AugmentedDataset, PickledDataset
-from aleatorpy import pseudo_random, method # pylint: disable=unused-import
+from aleatorpy import pseudo_random, method # noqa: F401
 
 
 

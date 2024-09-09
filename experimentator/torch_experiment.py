@@ -7,6 +7,7 @@ import torch
 from experimentator import SubsetType, BaseExperiment, ExperimentMode
 from .callbacked_experiment import Callback
 
+# ruff: noqa
 
 
 class TorchExperiment(BaseExperiment):
