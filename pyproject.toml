@@ -1,3 +1,36 @@
 [build-system]
-requires = ["setuptools", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[project]
+name = "experimentator"
+version = "3.0.0"
+authors = [
+    {name = "Gabriel Van Zandycke", email = "gabriel.vanzandycke@hotmail.com"},
+]
+description = "My deep-learning experimentation framework"
+requires-python = ">=3.8.2"
+dependencies = [
+    "mlworkflow>=0.4.0",
+    "dill>=0.3.6",
+    "numpy>=1.22",
+    "tqdm>=4.26",
+    "aleatorpy>=0.2.0",
+    "python-constraint>=1.4",
+    "pyconfyg>=0.0.3",
+    "python-dotenv>=0.21",
+]
+readme = "README.md"
+license = {text = "LGPL"}
+urls.Homepage = "https://github.com/gabriel-vanzandycke/experimentator"
+
+[project.optional-dependencies]
+tensorflow = ["tensorflow>=2.4"]
+wandb = ["wandb>=0.12.0", "pandas>=1.4.2"]
+
+[project.scripts]
+experiment = "experimentator:main"
+
+[tool.ruff.lint]
+ignore = ["E731", "E741"]
+unfixable = []
