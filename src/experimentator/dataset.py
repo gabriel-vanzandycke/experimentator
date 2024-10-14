@@ -314,14 +314,14 @@ class CachedPickledDataset(PickledDataset):
             return
 
         def function():
-            logging.info(f"Copying dataset to local scratch: {filename} -> " \
-                f"{self.filename}.")
+            print(f"Copying dataset to local scratch: {filename} -> {self.filename}")
             try:
                 shutil.copy(filename, self.filename)
-            except:
+            except BaseException as e:
+                print("More specific exception should be caught. Received e", e)
                 try:
                     os.remove(self.filename)
-                except:
+                except BaseException as e:
                     pass
                 logging.info("Failed copying dataset.")
                 self.query_item = super().query_item
@@ -330,7 +330,6 @@ class CachedPickledDataset(PickledDataset):
         self.thread.start()
 
     def reload(self):
-        logging.info(f"Reloading dataset from {self.filename}")
         print(f"Reloading dataset from {self.filename}")
         super().__init__(self.filename)
         self.query_item = super().query_item
