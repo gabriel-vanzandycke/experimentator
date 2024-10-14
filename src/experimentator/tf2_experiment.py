@@ -241,11 +241,15 @@ class ProfileCallback(Callback):
     batch_start: int = 1
     batch_stop: int = 4
     mode: (IntFlag, int) = ExperimentMode.ALL
+    logdir: str = "tensorboard"
+    def __post_init__(self):
+        self.logdir = os.path.join(os.environ['RESULTS_FOLDER'], self.logdir)
+
     def on_batch_begin(self, mode, epoch, batch, **_):
-        if self.batch_start == batch:
-            print("="*100 + "\nStart profiling\n" + "="*100)
-            tf.profiler.experimental.start("logdir")
+        if batch == self.batch_start:
+            print("="*100 + f"\nStart profiling (in {self.logdir})\n" + "="*100)
+            tf.profiler.experimental.start(self.logdir)
     def on_batch_end(self, mode, batch, **_):
         if batch == self.batch_stop:
             tf.profiler.experimental.stop()
-            print("="*100 + "\nStop profiling\n" + "="*100)
+            print("="*100 + "\nDone profiling\n" + "="*100)
