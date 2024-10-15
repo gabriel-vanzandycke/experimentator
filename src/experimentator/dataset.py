@@ -1,7 +1,7 @@
-from collections import defaultdict
 import dataclasses
 from enum import IntFlag
 import errno
+import inspect
 import logging
 import os
 import random
@@ -10,10 +10,8 @@ import threading
 
 import numpy as np
 
-from mlworkflow.datasets import batchify, Dataset, AugmentedDataset, PickledDataset
+from mlworkflow.datasets import batchify, Dataset, AugmentedDataset, PickledDataset, TransformedDataset, GeneratorBackedCache
 from aleatorpy import pseudo_random, method # noqa: F401
-
-
 
 
 def collate_fn(items):
@@ -32,6 +30,7 @@ class Subset:
     def __init__(self, name: str, stage: Stage, dataset: Dataset, keys=None, repetitions=1, desc=None):
         keys = keys if keys is not None else dataset.keys.all()
         assert isinstance(keys, (tuple, list)), f"Received instance of {type(keys)} for subset {name}"
+        assert isinstance(dataset, DataAugmentation, f"dataset must be an instance of {DataAugmentation.__class__.__name__}")
         self.name = name
         self.type = stage
         self.dataset = dataset#FilteredDataset(dataset, predicate=lambda k,v: v is not None)
@@ -44,7 +43,7 @@ class Subset:
         self.shuffled_keys = pseudo_random(evolutive=self.is_training)(self.shuffled_keys)
         self.query_item = pseudo_random(loop=loop, input_dependent=True)(self.query_item)
 
-    def shuffled_keys(self): # pylint: disable=method-hidden
+    def shuffled_keys(self):
         keys = self.keys * self.repetitions
         return random.sample(keys, len(keys)) if self.is_training else keys
 
@@ -73,52 +72,48 @@ class Subset:
         if not drop_last and d:
             yield d
 
-    def batches(self, batch_size, keys=None, *args, **kwargs):
+    def batches(self, batch_size, keys=None, drop_last=True, *args, **kwargs):
         keys = keys or self.shuffled_keys()
-        for chunk in self.chunkify(keys, chunk_size=batch_size):
+        for chunk in self.chunkify(keys, chunk_size=batch_size, drop_last=drop_last):
             keys, batch = list(zip(*chunk)) # transforms list of (k,v) into list of (k) and list of (v)
             yield keys, collate_fn(batch)
 
-class DataAugmentation(TransformedDataset):
-    def query_item(self, key, stage):
-
 
 class BalancedSubset(Subset):
-    @classmethod
-    def convert(cls, subset, balancer, classes):
-        if isinstance(subset, cls):
-            return subset
-        return cls(name=subset.name, stage=subset.type, dataset=subset.dataset, keys=subset.keys,
-            repetitions=subset.repetitions, desc=subset.desc, balancer=balancer, classes=classes)
-
-    def __init__(self, *args, balancer, classes, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.balancer = balancer
-        self.classes = classes if isinstance(classes, dict) else {c: 1 for c in classes}
-        for c, p in self.classes.items():
-            if p != 1:
-                raise NotImplementedError("BalancedSubset does not support non-uniform class probabilities")
-        self.balance = dict()
-
+    """
+    """
+    def __new__(cls, subset, classes, get_class):
+        subset.__cache = {
+            c: GeneratorBackedCache([k for k in subset.keys if get_class(k) == c])
+            for c in classes
+        }
+        return subset
     def shuffled_keys(self):
-        if self.balancer is None:
-            return super().shuffled_keys()
+        keys = super().shuffled_keys()
+        if not self.is_training:
+            return keys
 
-        pending_keys = defaultdict(list) # per class
-        yielded_keys = defaultdict(list) # per class
-        for _ in range(self.repetitions):
-            for key in self.keys:
-                try:
-                    c = self.balance.get(key) or self.balance.setdefault(key, self.balancer(key, self.query_item(key)))
-                except TypeError: # if query_item(key) is None (i.e. impossible to satisfy crop), a TypeError will be caught
-                    continue
-                pending_keys[c].append(key)
+        i = 0
+        try:
+            while True:
+                for c, l in self.__cache.items():
+                    yield l[i]
+                i += 1
+        except IndexError:
+            return
 
-                if all([len(pending_keys[c]) > 0 for c in self.classes]):
-                    for c in self.classes:
-                        key = pending_keys[c].pop(0)
-                        yielded_keys[c].append(key)
-                        yield key
+
+class DataAugmentation(TransformedDataset):
+    def query_item(self, key, stage):
+        item = self.parent.query_item(key)
+        for transform in self.transforms:
+            signature = inspect.signature(transform.__call__)
+            if len(signature.parameters) == 3:
+                item = transform(key, item)
+            elif len(signature.parameters) == 4:
+                item = transform(key, item, stage)
+        return item
+
 
 class FastFilteredDataset(Dataset):
     def __init__(self, parent, predicate):
@@ -167,16 +162,6 @@ class CombinedSubset(Subset):
             yield keys, batch
 
 
-class BalancedSubest(Subset):
-    """
-    """
-    def __init__(self, balancing_attr, *args, **kwargs):
-        super().__init__(self, *args, **kwargs)
-        self.balancing_attr = balancing_attr
-    def shuffled_keys(self):
-        # logic
-        return None
-
 class MergedDataset(Dataset):
     def __init__(self, *ds):
         self.ds = ds
@@ -190,7 +175,6 @@ class MergedDataset(Dataset):
         return self.cache[key].query_item(key)
 
 
-
 class TolerentDataset(AugmentedDataset):
     def __init__(self, parent, retry=0):
         super().__init__(parent)
@@ -201,7 +185,6 @@ class TolerentDataset(AugmentedDataset):
             root_item = self.parent.query_item(root_key)
             retry -= 1
         return root_item
-
 
 
 class DatasetSamplerDataset(Dataset):
