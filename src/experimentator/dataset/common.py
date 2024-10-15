@@ -30,7 +30,7 @@ class Subset:
     def __init__(self, name: str, stage: Stage, dataset: Dataset, keys=None, repetitions=1, desc=None):
         keys = keys if keys is not None else dataset.keys.all()
         assert isinstance(keys, (tuple, list)), f"Received instance of {type(keys)} for subset {name}"
-        assert isinstance(dataset, DataAugmentation), "dataset must be an instance of DataAugmentation"
+        assert isinstance(dataset, DataAugmentationDataset), "dataset must be an instance of DataAugmentationDataset"
         self.name = name
         self.type = stage
         self.dataset = dataset#FilteredDataset(dataset, predicate=lambda k,v: v is not None)
@@ -103,7 +103,7 @@ class BalancedSubset(Subset):
             return
 
 
-class DataAugmentation(TransformedDataset):
+class DataAugmentationDataset(TransformedDataset):
     def query_item(self, key, stage):
         item = self.parent.query_item(key)
         for transform in self.transforms:
