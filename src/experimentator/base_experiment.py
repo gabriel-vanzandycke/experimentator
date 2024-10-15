@@ -6,7 +6,7 @@ import numpy as np
 from tqdm.auto import tqdm
 from mlworkflow import SideRunner
 
-from experimentator.dataset import Subset, SubsetType
+from experimentator.dataset import Subset, Stage
 from experimentator.utils import ExperimentMode
 
 # pylint: disable=abstract-method
@@ -73,7 +73,7 @@ class BaseExperiment(metaclass=abc.ABCMeta):
     # yields pairs of (keys, data)
     def batch_generator(self, subset: Subset, batch_size=None, **kwargs):
         batch_size = batch_size or self.batch_size
-        drop_last = subset.type == SubsetType.TRAIN
+        drop_last = subset.type == Stage.TRAIN
         yield from subset.batches(batch_size=batch_size, drop_last=drop_last, **kwargs)
 
     @abc.abstractmethod
@@ -89,9 +89,9 @@ class BaseExperiment(metaclass=abc.ABCMeta):
     def run_batch(self, subset: Subset, batch_id: int, batch_generator, mode=ExperimentMode.ALL): # pylint: disable=unused-argument
         keys, data = next(batch_generator) # pylint: disable=unused-variable
         data['epoch'] = np.array([self.epoch]*len(keys))
-        if subset.type == SubsetType.TRAIN:
+        if subset.type == Stage.TRAIN:
             return keys, data, self.batch_train(data, mode)
-        elif subset.type == SubsetType.EVAL:
+        elif subset.type == Stage.EVAL:
             return keys, data, self.batch_eval(data)
         raise ValueError("Unknown subset type: {}".format(subset.type))
 
@@ -110,7 +110,7 @@ class BaseExperiment(metaclass=abc.ABCMeta):
                 break
 
     def run_epoch(self, mode: ExperimentMode): # pylint: disable=unused-argument
-        cond = lambda subset: mode == ExperimentMode.EVAL or subset.type == SubsetType.TRAIN
+        cond = lambda subset: mode == ExperimentMode.EVAL or subset.type == Stage.TRAIN
         subsets = [subset for subset in self.subsets if cond(subset)]
         assert subsets, "No single subset for this epoch"
         epoch_progress = self.progress(None, total=sum([len(subset)//self.batch_size for subset in subsets]), unit="batches")

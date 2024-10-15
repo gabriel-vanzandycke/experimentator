@@ -1,6 +1,6 @@
 import tensorflow as tf
 from mlworkflow import DictDataset
-from experimentator.dataset import Subset, SubsetType
+from experimentator.dataset import Subset, Stage
 import examples.tasks.mnist
 from experimentator.tf2_chunk_processors import CastFloat, ExpandDims, SoftmaxCrossEntropyLoss, OneHotEncode
 
@@ -9,8 +9,8 @@ experiment_type = [examples.tasks.mnist.MNISTExperiment]
 train, val = tf.keras.datasets.mnist.load_data()
 MNISTDataset = lambda subset: DictDataset(dict(enumerate(map(lambda x: {"input": x[0], "target": x[1]}, zip(*subset)))))
 subsets = [
-    Subset("training", SubsetType.TRAIN, MNISTDataset(train)),
-    Subset("validation", SubsetType.EVAL, MNISTDataset(val)),
+    Subset("training", Stage.TRAIN, MNISTDataset(train)),
+    Subset("validation", Stage.EVAL, MNISTDataset(val)),
 ]
 
 batch_size = 16

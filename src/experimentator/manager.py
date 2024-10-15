@@ -31,6 +31,7 @@ def set_cuda_visible_device(index):
 def build_experiment(config, load_weights=True, **kwargs) -> BaseExperiment:
     """ config: either a path to a config file or a string
     """
+    kwargs.update(filename=config) # required to know where file is loaded from
     confyg = Confyg(config, kwargs)
     if kwargs.get("dummy", False):
         confyg.dict["experiment_type"].append(DummyExperiment)

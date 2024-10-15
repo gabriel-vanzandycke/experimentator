@@ -4,7 +4,7 @@ import glob
 import logging
 import numpy as np
 import torch
-from experimentator import SubsetType, BaseExperiment, ExperimentMode
+from experimentator import Stage, BaseExperiment, ExperimentMode
 from .callbacked_experiment import Callback
 
 # ruff: noqa
@@ -177,7 +177,7 @@ class EpochExponentialMovingAverage(Callback):
     def on_epoch_begin(self, **_):
         self.ema = tf.train.ExponentialMovingAverage(decay=self.decay)
     def on_batch_end(self, cycle_type, **_):
-        if cycle_type & SubsetType.TRAIN:
+        if cycle_type & Stage.TRAIN:
             self.ema.apply(self.train_model.trainable_variables)
     def on_epoch_end(self, **_):
         for var in self.train_model.trainable_variables:

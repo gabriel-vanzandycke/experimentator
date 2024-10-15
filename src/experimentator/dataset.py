@@ -22,24 +22,24 @@ def collate_fn(items):
 
 # This object is defined both in here and in experimentator repository
 # Any change here should be reported in experimentator as well
-class SubsetType(IntFlag):
+class Stage(IntFlag):
     TRAIN = 1
     EVAL  = 2
 
 # This object is defined both in here and in experimentator repository
 # Any change here should be reported in experimentator as well
 class Subset:
-    def __init__(self, name: str, subset_type: SubsetType, dataset: Dataset, keys=None, repetitions=1, desc=None):
+    def __init__(self, name: str, stage: Stage, dataset: Dataset, keys=None, repetitions=1, desc=None):
         keys = keys if keys is not None else dataset.keys.all()
         assert isinstance(keys, (tuple, list)), f"Received instance of {type(keys)} for subset {name}"
         self.name = name
-        self.type = subset_type
+        self.type = stage
         self.dataset = dataset#FilteredDataset(dataset, predicate=lambda k,v: v is not None)
         self._keys = keys
         self.keys = keys
         self.repetitions = repetitions
         self.desc = desc
-        self.is_training = self.type == SubsetType.TRAIN
+        self.is_training = self.type == Stage.TRAIN
         loop = None if self.is_training else repetitions
         self.shuffled_keys = pseudo_random(evolutive=self.is_training)(self.shuffled_keys)
         self.query_item = pseudo_random(loop=loop, input_dependent=True)(self.query_item)
@@ -79,13 +79,16 @@ class Subset:
             keys, batch = list(zip(*chunk)) # transforms list of (k,v) into list of (k) and list of (v)
             yield keys, collate_fn(batch)
 
+class DataAugmentation(TransformedDataset):
+    def query_item(self, key, stage):
+
 
 class BalancedSubset(Subset):
     @classmethod
     def convert(cls, subset, balancer, classes):
         if isinstance(subset, cls):
             return subset
-        return cls(name=subset.name, subset_type=subset.type, dataset=subset.dataset, keys=subset.keys,
+        return cls(name=subset.name, stage=subset.type, dataset=subset.dataset, keys=subset.keys,
             repetitions=subset.repetitions, desc=subset.desc, balancer=balancer, classes=classes)
 
     def __init__(self, *args, balancer, classes, **kwargs):
@@ -240,9 +243,9 @@ class BasicDatasetSplitter:
         training_keys   = keys[u2*l//100:]
 
         return [
-            Subset("training", subset_type=SubsetType.TRAIN, keys=training_keys, dataset=dataset),
-            Subset("validation", subset_type=SubsetType.EVAL, keys=validation_keys, dataset=dataset),
-            Subset("testing", subset_type=SubsetType.EVAL, keys=testing_keys, dataset=dataset),
+            Subset("training", stage=Stage.TRAIN, keys=training_keys, dataset=dataset),
+            Subset("validation", stage=Stage.EVAL, keys=validation_keys, dataset=dataset),
+            Subset("testing", stage=Stage.EVAL, keys=testing_keys, dataset=dataset),
         ]
 
 

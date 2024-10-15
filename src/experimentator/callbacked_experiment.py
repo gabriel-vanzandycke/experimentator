@@ -15,7 +15,7 @@ import constraint as cst
 import numpy as np
 import pickle
 
-from experimentator import BaseExperiment, SubsetType, ExperimentMode, DataCollector
+from experimentator import BaseExperiment, Stage, ExperimentMode, DataCollector
 
 # pylint: disable=logging-fstring-interpolation
 
@@ -256,7 +256,7 @@ class FindLearningRate(Callback):
     def init(self, exp):
         self.learning_rate_setter = exp.set_learning_rate
         self.learning_rate_getter = exp.get_learning_rate
-        self.batch_count = sum([len(subset.keys)//exp.batch_size for subset in exp.subsets if subset.type & SubsetType.TRAIN])
+        self.batch_count = sum([len(subset.keys)//exp.batch_size for subset in exp.subsets if subset.type & Stage.TRAIN])
         print("batch_count=", self.batch_count)
         assert all([not isinstance(cb, (LearningRateWarmUp, LearningRateDecay)) for cb in exp.cfg['callbacks']]), f"{self.__class__} is incompatible with existing callbacks"
     def compute_factor(self, step):
@@ -265,14 +265,14 @@ class FindLearningRate(Callback):
         exp = initial_exp + (final_exp - initial_exp)*step/self.steps
         return np.exp(exp)
     def on_batch_begin(self, cycle_type, epoch, batch, **_):
-        if cycle_type == SubsetType.TRAIN:
+        if cycle_type == Stage.TRAIN:
             step = epoch*self.batch_count + batch
             if step >= self.steps:
                 self.interruption_scheduled = True
             factor = self.compute_factor(step=step)
             self.learning_rate_setter(self.initial_learning_rate * factor)
     def on_batch_end(self, cycle_type, loss, **_):
-        if cycle_type == SubsetType.TRAIN:
+        if cycle_type == Stage.TRAIN:
             loss = np.mean(loss)
             self.history.append(loss)
             if len(self.history) == self.steps:
@@ -304,7 +304,7 @@ class LearningRateDecay(Callback):
         self.learning_rate_setter = exp.set_learning_rate
         self.learning_rate_getter = exp.get_learning_rate
         self.learning_rate = self.learning_rate_getter()
-        self.batch_count = sum([len(subset.keys)//exp.batch_size for subset in exp.subsets if subset.type & SubsetType.TRAIN])
+        self.batch_count = sum([len(subset.keys)//exp.batch_size for subset in exp.subsets if subset.type & Stage.TRAIN])
         # adjust start and duration per step
         self.start = [epoch_start * self.batch_count for epoch_start in self.start]
         self.duration = self.duration * self.batch_count
@@ -319,7 +319,7 @@ class LearningRateDecay(Callback):
                 step_factor *= self.factor ** ((step - start)/self.duration)
         return step_factor
     def on_batch_begin(self, cycle_type, epoch, batch, **_):
-        if cycle_type == SubsetType.TRAIN and self.start:
+        if cycle_type == Stage.TRAIN and self.start:
             self.learning_rate_setter(self.learning_rate * self.compute_factor(step=epoch*self.batch_count + batch))
 
 @dataclass
@@ -339,7 +339,7 @@ class LearningRateWarmUp(Callback):
         self.learning_rate_setter = exp.set_learning_rate
         self.learning_rate_getter = exp.get_learning_rate
         self.learning_rate = self.learning_rate_getter()
-        self.batch_count = sum([len(subset.keys)//exp.batch_size for subset in exp.subsets if subset.type & SubsetType.TRAIN])
+        self.batch_count = sum([len(subset.keys)//exp.batch_size for subset in exp.subsets if subset.type & Stage.TRAIN])
         # adjust start and duration per step
         self.start *= self.batch_count
         self.duration *= self.batch_count
@@ -352,7 +352,7 @@ class LearningRateWarmUp(Callback):
             step_factor *= self.factor ** (1.0 - (step - self.start)/self.duration)
         return step_factor
     def on_batch_begin(self, cycle_type, epoch, batch, **_):
-        if cycle_type == SubsetType.TRAIN:
+        if cycle_type == Stage.TRAIN:
             self.learning_rate_setter(self.learning_rate * self.compute_factor(step=epoch*self.batch_count + batch))
 
 @dataclass
