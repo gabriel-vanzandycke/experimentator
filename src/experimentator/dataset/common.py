@@ -30,7 +30,7 @@ class Subset:
     def __init__(self, name: str, stage: Stage, dataset: Dataset, keys=None, repetitions=1, desc=None):
         keys = keys if keys is not None else dataset.keys.all()
         assert isinstance(keys, (tuple, list)), f"Received instance of {type(keys)} for subset {name}"
-        assert isinstance(dataset, DataAugmentationDataset), "dataset must be an instance of DataAugmentationDataset"
+        assert DataAugmentationDataset.__name__ == dataset.__class__.__name__, "dataset must be an instance of DataAugmentationDataset" # comparing name rather than class enables class being defined in shared git-subtree
         self.name = name
         self.type = stage
         self.dataset = dataset#FilteredDataset(dataset, predicate=lambda k,v: v is not None)
