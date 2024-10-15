@@ -109,9 +109,9 @@ class DataAugmentationDataset(TransformedDataset):
         for transform in self.transforms:
             signature = inspect.signature(transform.__call__)
             if len(signature.parameters) == 3:
-                item = transform(key, item)
-            elif len(signature.parameters) == 4:
                 item = transform(key, item, stage)
+            elif len(signature.parameters) == 2:
+                item = transform(key, item)
         return item
 
 
