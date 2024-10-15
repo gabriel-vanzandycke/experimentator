@@ -9,7 +9,7 @@ import shutil
 import threading
 
 import numpy as np
-# test
+
 from mlworkflow.datasets import batchify, Dataset, AugmentedDataset, PickledDataset, TransformedDataset, GeneratorBackedCache
 from aleatorpy import pseudo_random, method # noqa: F401
 
@@ -30,7 +30,7 @@ class Subset:
     def __init__(self, name: str, stage: Stage, dataset: Dataset, keys=None, repetitions=1, desc=None):
         keys = keys if keys is not None else dataset.keys.all()
         assert isinstance(keys, (tuple, list)), f"Received instance of {type(keys)} for subset {name}"
-        assert isinstance(dataset, DataAugmentation, f"dataset must be an instance of {DataAugmentation.__class__.__name__}")
+        assert isinstance(dataset, DataAugmentation), f"dataset must be an instance of {DataAugmentation.__class__.__name__}"
         self.name = name
         self.type = stage
         self.dataset = dataset#FilteredDataset(dataset, predicate=lambda k,v: v is not None)
